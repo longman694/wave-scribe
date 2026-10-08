@@ -173,6 +173,16 @@ describe('Reactive Store & State Management', () => {
     const deleted = store.deleteNote(note.id);
     assert.equal(deleted, true);
     assert.equal(store.getState().notes.length, 0);
+
+    // Test clearNotes
+    store.addNote({ trackId: 'track-melody', pitchName: 'C4', startTime: 0, duration: 0.5 });
+    store.addNote({ trackId: 'track-bass', pitchName: 'C2', startTime: 0, duration: 0.5 });
+    assert.equal(store.getState().notes.length, 2);
+    store.clearNotes('track-melody');
+    assert.equal(store.getState().notes.length, 1);
+    assert.equal(store.getState().notes[0].trackId, 'track-bass');
+    store.clearNotes();
+    assert.equal(store.getState().notes.length, 0);
   });
 
   test('Undo and Redo stack works correctly for note operations', () => {
@@ -204,6 +214,23 @@ describe('Reactive Store & State Management', () => {
     assert.equal(store.getState().notes.length, 0);
 
     // Redo back
+    store.redo();
+    assert.equal(store.getState().notes.length, 1);
+
+    // Batch deleteNotes atomic undo test
+    const note3 = store.addNote({ pitchName: 'E4', startTime: 2.0, duration: 0.5 });
+    const note4 = store.addNote({ pitchName: 'G4', startTime: 3.0, duration: 0.5 });
+    assert.equal(store.getState().notes.length, 3);
+
+    const deletedCount = store.deleteNotes([note3.id, note4.id]);
+    assert.equal(deletedCount, 2);
+    assert.equal(store.getState().notes.length, 1);
+
+    // Single undo restores all batch-deleted notes
+    store.undo();
+    assert.equal(store.getState().notes.length, 3);
+
+    // Redo re-deletes them
     store.redo();
     assert.equal(store.getState().notes.length, 1);
   });
@@ -307,4 +334,60 @@ describe('Reactive Store & State Management', () => {
     store.undo();
     assert.equal(store.getState().notes.length, 2);
   });
+
+  test('Multi-Track management: addTrack, deleteTrack, mute and solo', () => {
+    const store = new Store();
+    assert.equal(store.getState().tracks.length, 3);
+
+    // Add Custom Track
+    const newTrack = store.addTrack({
+      name: 'Synth Pad',
+      timbre: 'epiano',
+      color: '#f43f5e',
+      volume: 0.9
+    });
+
+    assert.equal(store.getState().tracks.length, 4);
+    assert.equal(newTrack.name, 'Synth Pad');
+    assert.equal(newTrack.timbre, 'epiano');
+    assert.equal(newTrack.color, '#f43f5e');
+    assert.equal(store.getState().view.activeTrackId, newTrack.id);
+
+    // Add note to the new track
+    const note = store.addNote({
+      trackId: newTrack.id,
+      pitchName: 'E4',
+      startTime: 2.0,
+      duration: 1.0
+    });
+    assert.equal(store.getState().notes.length, 1);
+    assert.equal(store.getState().notes[0].trackId, newTrack.id);
+
+    // Toggle mute and solo
+    store.toggleTrackMute(newTrack.id);
+    assert.equal(store.getState().tracks.find(t => t.id === newTrack.id).muted, true);
+    store.toggleTrackMute(newTrack.id);
+    assert.equal(store.getState().tracks.find(t => t.id === newTrack.id).muted, false);
+
+    store.toggleTrackSolo(newTrack.id);
+    assert.equal(store.getState().tracks.find(t => t.id === newTrack.id).solo, true);
+    store.toggleTrackSolo(newTrack.id);
+    assert.equal(store.getState().tracks.find(t => t.id === newTrack.id).solo, false);
+
+    // Delete track removes track and associated notes
+    const deleted = store.deleteTrack(newTrack.id);
+    assert.equal(deleted, true);
+    assert.equal(store.getState().tracks.length, 3);
+    assert.equal(store.getState().notes.length, 0); // Note was cleaned up
+    assert.equal(store.getState().view.activeTrackId, store.getState().tracks[0].id);
+
+    // Cannot delete when only 1 track remains
+    store.deleteTrack(store.getState().tracks[2].id);
+    store.deleteTrack(store.getState().tracks[1].id);
+    assert.equal(store.getState().tracks.length, 1);
+    const cannotDeleteLast = store.deleteTrack(store.getState().tracks[0].id);
+    assert.equal(cannotDeleteLast, false);
+    assert.equal(store.getState().tracks.length, 1);
+  });
 });
+

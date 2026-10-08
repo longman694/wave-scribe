@@ -29,16 +29,16 @@ This document splits the complete implementation of the Modern Single-Page Web A
 ---
 
 ### Phase 2: Web Audio Engine, Audio Ingestion & Waveform Visualization
-- [ ] **Task 2.1: Robust Audio Ingestion (Drag-and-Drop & File Picker)**
+- [x] **Task 2.1: Robust Audio Ingestion (Drag-and-Drop & File Picker)**
   - Support `mp3`, `wav`, `flac`, `m4a`, `ogg` formats with drag-and-drop dropzone and file selector input.
   - Read files as `ArrayBuffer` and `Blob` URL.
   - Fallback error handling with user-friendly toast notifications for unsupported or corrupted files.
-- [ ] **Task 2.2: Dual Web Audio Pipeline**
+- [x] **Task 2.2: Dual Web Audio Pipeline**
   - Configure `AudioContext` with proper browser autoplay policy unlocking (resuming context on first user gesture).
   - Create `HTMLAudioElement` routed to `MediaElementAudioSourceNode` -> `BiquadFilterNode` / `GainNode` -> `audioContext.destination`.
   - Set `audioElement.preservesPitch = true` for zero-latency, pitch-preserved timestretching.
   - Asynchronously decode `audioBuffer` via `audioContext.decodeAudioData` to generate precomputed multi-resolution peak caches (downsampled RMS & min/max amplitudes).
-- [ ] **Task 2.3: High-DPI Multi-Zoom Interactive Waveform Display**
+- [x] **Task 2.3: High-DPI Multi-Zoom Interactive Waveform Display**
   - Render dual-channel (stereo) or downmixed mono waveform onto a high-DPI Canvas (`devicePixelRatio`).
   - Implement zoom levels: full track overview down to microsecond sample view (e.g., 100% overview to 1000px/second).
   - Implement smooth playhead cursor line (Electric Cyan `#38bdf8`) driven by `requestAnimationFrame` with sub-millisecond accuracy.
@@ -48,25 +48,25 @@ This document splits the complete implementation of the Modern Single-Page Web A
 ---
 
 ### Phase 3: Playback Controls, Tempo & Pitch Fine-Tuning
-- [ ] **Task 3.1: Global Transport Controls**
+- [x] **Task 3.1: Global Transport Controls**
   - Implement Play / Pause, Stop / Rewind to start, Jump forward/back 1s, Jump forward/back 5s.
   - Implement time display formatted as `MM:SS.mmm / Total MM:SS.mmm`.
-- [ ] **Task 3.2: Variable Playback Rate Engine**
+- [x] **Task 3.2: Variable Playback Rate Engine**
   - Playback rate slider with range $0.25\times$ to $2.00\times$ (step $0.05\times$).
   - Quick-preset buttons: `0.5x`, `0.75x`, `1.0x`, `1.25x`.
   - Ensure pitch remains strictly unchanged during speed shifts (`preservesPitch = true`).
-- [ ] **Task 3.3: Fine-Tuning Pitch Adjustment (±50 Cents)**
+- [x] **Task 3.3: Fine-Tuning Pitch Adjustment (±50 Cents)**
   - Cents slider ($\pm 50$ cents, step $1$ cent) with reset to zero button.
   - Implement cents detuning calculation ($f' = f \cdot 2^{\text{cents}/1200}$) applied to the reference track / synth pitch reference.
 
 ---
 
 ### Phase 4: Precision A-B Looping System
-- [ ] **Task 4.1: Visual Waveform A-B Range Selection**
+- [x] **Task 4.1: Visual Waveform A-B Range Selection**
   - Allow users to click-and-drag directly on the waveform to designate Loop In ($A$) and Loop Out ($B$).
   - Draw visual highlighted loop region with semi-transparent overlay and Rose (`#f43f5e`) boundary marker flags.
   - Draggable handle edges to adjust $A$ or $B$ points interactively.
-- [ ] **Task 4.2: Seamless Loop Playback Logic**
+- [x] **Task 4.2: Seamless Loop Playback Logic**
   - High-frequency loop boundary monitor in the audio clock loop.
   - When playhead exceeds point $B$, instantly seek back to point $A$ without audio pops or stutter.
   - Toggle Loop Mode (`L`), Set $A$ (`[` or `I`), Set $B$ (`]` or `O`), Clear Loop (`Esc`).
@@ -74,16 +74,16 @@ This document splits the complete implementation of the Modern Single-Page Web A
 ---
 
 ### Phase 5: Synchronized Note / Chord Event Track & Polyphonic Synth
-- [ ] **Task 5.1: Synchronized Timeline Annotation Track**
+- [x] **Task 5.1: Synchronized Timeline Annotation Track**
   - Timeline lane positioned immediately beneath the waveform.
   - Note and Chord marker insertion at the exact playhead position (`N` key for note, `C` key for chord).
   - Visual blocks aligned horizontally with waveform time showing note pitch (e.g., `C4`, `F#3`) and chord symbol (e.g., `Dm7b5`, `G7#9`).
   - Inline modal / popup editor to edit pitch name, duration, and chord symbol.
-- [ ] **Task 5.2: Built-in Polyphonic Synthesizer Engine**
+- [x] **Task 5.2: Built-in Polyphonic Synthesizer Engine**
   - Native Web Audio synthesizer with polyphonic voice manager.
   - Support ADSR envelopes (Attack, Decay, Sustain, Release) and anti-click smoothing.
   - Synthesize transcribed notes in real-time as the playhead sweeps over them during playback.
-- [ ] **Task 5.3: Playback Monitoring Modes & Mixer**
+- [x] **Task 5.3: Playback Monitoring Modes & Mixer**
   - Mode 1: Reference Audio Only.
   - Mode 2: Audio + Transcript Synth Overlaid (simultaneous playback for hearing transcription against reference).
   - Mode 3: Transcript Synth Solo (reference audio muted).
@@ -92,39 +92,39 @@ This document splits the complete implementation of the Modern Single-Page Web A
 ---
 
 ### Phase 6: Interactive Piano Roll View
-- [ ] **Task 6.1: High-DPI Piano Roll Grid (A0 to C8)**
+- [x] **Task 6.1: High-DPI Piano Roll Grid (A0 to C8)**
   - Vertical pitch grid covering MIDI notes 21 ($A_0$, $27.5\text{ Hz}$) to 108 ($C_8$, $4186\text{ Hz}$).
   - Alternating pitch rows highlighting white keys vs black keys with piano keyboard gutter on the left.
   - Horizontal time axis strictly synchronized with the waveform zoom and scroll position.
-- [ ] **Task 6.2: Interactive Note Editing & Manipulation**
+- [x] **Task 6.2: Interactive Note Editing & Manipulation**
   - Click-and-drag to draw new notes on the grid.
   - Drag notes horizontally to adjust start time; drag vertically to change pitch.
   - Right-edge resize handles to adjust note duration.
   - Note selection (single or marquee lasso), note deletion (`Delete` / `Backspace`), and copy/paste.
   - Interactive audition: clicking a note or piano key triggers immediate synth preview.
-- [ ] **Task 6.3: Synchronized Playhead Cursor**
+- [x] **Task 6.3: Synchronized Playhead Cursor**
   - Continuous synchronized playhead line drawn across both the Waveform and the Piano Roll canvases.
   - Auto-scroll / smooth follow option to keep playhead visible during playback.
 
 ---
 
 ### Phase 7: Musical Grid, Snap-to-Grid & Tap Tempo
-- [ ] **Task 7.1: Musical Grid & Quantization Engine**
+- [x] **Task 7.1: Musical Grid & Quantization Engine**
   - Configurable BPM (20 to 300) and Time Signature ($4/4$, $3/4$, $6/8$, $5/4$, $7/8$).
   - Grid snap toggle options: Off, $1/4$ note, $1/8$ note, $1/16$ note, $1/8$ Triplet ($1/8\text{T}$).
   - Automatic snapping of note placement and resizing to the nearest grid subdivision when snap is enabled.
-- [ ] **Task 7.2: Tap Tempo Tool**
+- [x] **Task 7.2: Tap Tempo Tool**
   - Tap button and hotkey (`T`) computing inter-tap intervals with rolling average BPM calculation.
   - Visual metronome pulse indicator.
 
 ---
 
 ### Phase 8: Multi-Track / Multi-Instrument Layering
-- [ ] **Task 8.1: Multi-Lane Transcription Architecture**
+- [x] **Task 8.1: Multi-Lane Transcription Architecture**
   - Support independent tracks: Melody (Lead), Bass, Harmony/Chords, and Custom tracks.
   - Distinct color coding for each track (Cyan for Melody, Emerald for Bass, Purple for Chords).
   - Per-track Solo (`S`) and Mute (`M`) switches.
-- [ ] **Task 8.2: Distinct Synth Timbres per Track**
+- [x] **Task 8.2: Distinct Synth Timbres per Track**
   - Melody: Pure sine lead with gentle vibrato and snappy ADSR.
   - Bass: Deep triangle/sawtooth with steep low-pass filter ($300\text{ Hz}$).
   - Harmony: Polyphonic electric piano (rich harmonic additive spectrum with exponential decay).
@@ -132,18 +132,18 @@ This document splits the complete implementation of the Modern Single-Page Web A
 ---
 
 ### Phase 9: Export, Import & Resilient Local Persistence
-- [ ] **Task 9.1: Standard MIDI (.mid) Binary Exporter**
+- [x] **Task 9.1: Standard MIDI (.mid) Binary Exporter**
   - Zero-dependency client-side Standard MIDI File (SMF Type 1) binary encoder.
   - Creates valid `MThd` and `MTrk` chunks with tempo meta-events, time signature meta-events, and Note-On / Note-Off messages.
   - Generates downloadable `.mid` file with track separation.
-- [ ] **Task 9.2: MusicXML Exporter**
+- [x] **Task 9.2: MusicXML Exporter**
   - Converts notes and chords into valid MusicXML 3.1 / 4.0 XML format.
   - Includes score-partwise structure, pitch step/octave/alter, measure divisions, and chord tags.
   - Generates downloadable `.musicxml` file importable into MuseScore, Sibelius, or Dorico.
-- [ ] **Task 9.3: Full Project Session JSON Export & Import**
+- [x] **Task 9.3: Full Project Session JSON Export & Import**
   - Export comprehensive session JSON (audio filename, metadata, tempo, tracks, notes, loops, markers).
   - Import session JSON to restore complete state.
-- [ ] **Task 9.4: Resilient Local Persistence (IndexedDB + LocalStorage)**
+- [x] **Task 9.4: Resilient Local Persistence (IndexedDB + LocalStorage)**
   - Store audio binary Blob in IndexedDB (`MusicTranscriberDB`).
   - Store active transcription state, undo stack, and UI preferences in `localStorage`.
   - Automatic prompt to restore last session on page reload.
@@ -151,13 +151,13 @@ This document splits the complete implementation of the Modern Single-Page Web A
 ---
 
 ### Phase 10: Keyboard Shortcuts, Visual Polish & Verification
-- [ ] **Task 10.1: Complete Keyboard Shortcut Integration**
+- [x] **Task 10.1: Complete Keyboard Shortcut Integration**
   - Wire up all hotkeys specified in the Project Brief (`Space`, `Left`/`Right`, `Shift`+`Left`/`Right`, `[`/`]`, `L`, `N`, `Up`/`Down`, `M`, etc.).
   - Shortcut helper modal (`?` key) showing clean cheat sheet.
-- [ ] **Task 10.2: Performance & High-DPI Canvas Optimization**
+- [x] **Task 10.2: Performance & High-DPI Canvas Optimization**
   - Batch canvas drawing, offscreen waveform rendering cache, and subpixel anti-aliasing.
   - Profile memory usage and prevent Web Audio node leaks upon voice release.
-- [ ] **Task 10.3: Final Integration Testing & QA**
+- [x] **Task 10.3: Final Integration Testing & QA**
   - Run automated unit tests and browser end-to-end tests.
   - Verify complete offline operation without any network requests.
 
@@ -225,13 +225,13 @@ Using a local HTTP server (`python -m http.server 8000` or Node `npx serve`):
 ---
 
 ### 4. Manual QA & UX Checklist
-- [ ] Drag & drop an MP3/WAV file onto the dropzone.
-- [ ] Waveform renders cleanly at $1\times$ and $4\times$ zoom levels.
-- [ ] Scrubbing the playhead updates time readout without glitching.
-- [ ] Pitch preservation works smoothly when changing playback rate to $0.5\times$ and $1.5\times$.
-- [ ] Loop playback repeats seamlessly between points $A$ and $B$.
-- [ ] Notes can be drawn, moved, resized, and deleted in the piano roll.
-- [ ] Transcribed notes play audibly through the synth voice when playhead crosses them.
-- [ ] Solo synth mode mutes reference audio.
-- [ ] Exported `.mid` file opens and plays accurately in external DAW or notation software.
-- [ ] Refreshing browser restores session without data loss.
+- [x] Drag & drop an MP3/WAV file onto the dropzone.
+- [x] Waveform renders cleanly at $1\times$ and $4\times$ zoom levels.
+- [x] Scrubbing the playhead updates time readout without glitching.
+- [x] Pitch preservation works smoothly when changing playback rate to $0.5\times$ and $1.5\times$.
+- [x] Loop playback repeats seamlessly between points $A$ and $B$.
+- [x] Notes can be drawn, moved, resized, and deleted in the piano roll.
+- [x] Transcribed notes play audibly through the synth voice when playhead crosses them.
+- [x] Solo synth mode mutes reference audio.
+- [x] Exported `.mid` file opens and plays accurately in external DAW or notation software.
+- [x] Refreshing browser restores session without data loss.

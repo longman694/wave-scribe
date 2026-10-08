@@ -7,6 +7,18 @@
 
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+export const TRACK_COLORS = [
+  '#38bdf8', // Cyan (Melody)
+  '#10b981', // Emerald (Bass)
+  '#a855f7', // Purple (Chords)
+  '#f43f5e', // Rose
+  '#f59e0b', // Amber
+  '#06b6d4', // Teal
+  '#ec4899', // Pink
+  '#8b5cf6', // Violet
+  '#3b82f6'  // Blue
+];
+
 /**
  * Converts a MIDI note number (21 = A0, 60 = C4, 108 = C8) to scientific pitch name.
  * @param {number} midi
@@ -338,11 +350,29 @@ export class Store {
 
   setLoop(enabled, start = null, end = null) {
     this.snapshotForHistory('Change Loop');
-    if (start !== null) this.state.playback.loop.start = Math.max(0, start);
-    if (end !== null) {
-      const maxDuration = this.state.audio.duration || Infinity;
-      this.state.playback.loop.end = Math.min(maxDuration, Math.max(this.state.playback.loop.start, end));
+    const maxDuration = this.state.audio.duration || Infinity;
+
+    if (start !== null && end !== null) {
+      let s = Math.max(0, start);
+      let e = Math.min(maxDuration, end);
+      if (s > e) [s, e] = [e, s];
+      if (e - s < 0.05) e = Math.min(maxDuration, s + 0.05);
+      this.state.playback.loop.start = s;
+      this.state.playback.loop.end = e;
+    } else if (start !== null) {
+      let s = Math.max(0, start);
+      this.state.playback.loop.start = s;
+      if (this.state.playback.loop.end <= s) {
+        this.state.playback.loop.end = Math.min(maxDuration, s + 2.0);
+      }
+    } else if (end !== null) {
+      let e = Math.min(maxDuration, end);
+      this.state.playback.loop.end = e;
+      if (this.state.playback.loop.start >= e) {
+        this.state.playback.loop.start = Math.max(0, e - 2.0);
+      }
     }
+
     this.state.playback.loop.enabled = !!enabled;
     this.notify('playback:loop', this.state.playback.loop);
     this.eventBus.emit('playback:loop', this.state.playback.loop);
@@ -372,11 +402,13 @@ export class Store {
   setAudioVolume(vol) {
     this.state.playback.audioVolume = Math.max(0, Math.min(1, vol));
     this.notify('playback:volume:audio', this.state.playback.audioVolume);
+    this.eventBus.emit('playback:volume:audio', this.state.playback.audioVolume);
   }
 
   setSynthVolume(vol) {
     this.state.playback.synthVolume = Math.max(0, Math.min(1, vol));
     this.notify('playback:volume:synth', this.state.playback.synthVolume);
+    this.eventBus.emit('playback:volume:synth', this.state.playback.synthVolume);
   }
 
   // --- Tempo & Grid Actions ---
@@ -545,13 +577,106 @@ export class Store {
     return true;
   }
 
+  deleteNotes(noteIds) {
+    if (!Array.isArray(noteIds) || noteIds.length === 0) return 0;
+    const idSet = new Set(noteIds);
+    const toRemove = this.state.notes.filter(n => idSet.has(n.id));
+    if (toRemove.length === 0) return 0;
+
+    this.snapshotForHistory(`Delete ${toRemove.length} Notes`);
+    this.state.notes = this.state.notes.filter(n => !idSet.has(n.id));
+    if (this.state.view.selectedNoteId && idSet.has(this.state.view.selectedNoteId)) {
+      this.state.view.selectedNoteId = null;
+    }
+    this.notify('notes:delete', toRemove);
+    this.eventBus.emit('notes:changed', this.state.notes);
+    return toRemove.length;
+  }
+
+  clearNotes(trackId = null) {
+    this.snapshotForHistory('Clear Notes');
+    if (trackId) {
+      this.state.notes = this.state.notes.filter(n => n.trackId !== trackId);
+    } else {
+      this.state.notes = [];
+    }
+    if (this.state.view.selectedNoteId) {
+      const stillExists = this.state.notes.some(n => n.id === this.state.view.selectedNoteId);
+      if (!stillExists) this.state.view.selectedNoteId = null;
+    }
+    this.notify('notes:clear', { trackId });
+    this.eventBus.emit('notes:changed', this.state.notes);
+  }
+
   // --- Track Actions ---
+
+  addTrack(trackData = {}) {
+    this.snapshotForHistory('Add Track');
+    const index = this.state.tracks.length;
+    const defaultColor = TRACK_COLORS[index % TRACK_COLORS.length];
+    const id = trackData.id || `track-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const name = trackData.name || `Track ${index + 1}`;
+    const color = trackData.color || defaultColor;
+    const timbre = trackData.timbre || 'sine';
+    const volume = typeof trackData.volume === 'number' ? Math.max(0, Math.min(1, trackData.volume)) : 1.0;
+    const muted = Boolean(trackData.muted);
+    const solo = Boolean(trackData.solo);
+
+    const newTrack = { id, name, color, timbre, volume, muted, solo };
+    this.state.tracks.push(newTrack);
+    this.state.view.activeTrackId = id;
+
+    this.notify('tracks:add', newTrack);
+    this.eventBus.emit('tracks:changed', this.state.tracks);
+    return newTrack;
+  }
+
+  deleteTrack(trackId) {
+    if (this.state.tracks.length <= 1) return false;
+    const index = this.state.tracks.findIndex(t => t.id === trackId);
+    if (index === -1) return false;
+
+    this.snapshotForHistory('Delete Track');
+    const [removedTrack] = this.state.tracks.splice(index, 1);
+
+    // Remove any notes belonging to the deleted track
+    this.state.notes = this.state.notes.filter(n => n.trackId !== trackId);
+
+    // If active track was the deleted track, switch to first available track
+    if (this.state.view.activeTrackId === trackId) {
+      this.state.view.activeTrackId = this.state.tracks[0].id;
+      this.notify('view:activeTrack', this.state.view.activeTrackId);
+    }
+
+    this.notify('tracks:delete', removedTrack);
+    this.eventBus.emit('tracks:changed', this.state.tracks);
+    this.eventBus.emit('notes:changed', this.state.notes);
+    return true;
+  }
 
   updateTrack(trackId, updates) {
     const track = this.state.tracks.find(t => t.id === trackId);
     if (!track) return null;
 
     Object.assign(track, updates);
+    this.notify('tracks:update', track);
+    this.eventBus.emit('tracks:changed', this.state.tracks);
+    return track;
+  }
+
+  toggleTrackMute(trackId) {
+    const track = this.state.tracks.find(t => t.id === trackId);
+    if (!track) return null;
+    track.muted = !track.muted;
+    this.notify('tracks:update', track);
+    this.eventBus.emit('tracks:changed', this.state.tracks);
+    return track;
+  }
+
+  toggleTrackSolo(trackId) {
+    const track = this.state.tracks.find(t => t.id === trackId);
+    if (!track) return null;
+    track.solo = !track.solo;
     this.notify('tracks:update', track);
     this.eventBus.emit('tracks:changed', this.state.tracks);
     return track;

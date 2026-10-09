@@ -7,8 +7,16 @@
   <meta name="description" content="Professional, zero-backend, single-page web audio transcriber with sample-accurate waveform playback, tempo stretching, precision looping, and interactive piano roll.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Music&display=swap" rel="stylesheet">
   <style>
+    @font-face {
+      font-family: 'Noto Music';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url('https://fonts.gstatic.com/s/notomusic/v21/pe0rMIiSN5pO63htf1sxItc.ttf') format('truetype');
+    }
+
     /* --- CSS Variables & Design System --- */
     :root {
       color-scheme: dark;
@@ -46,6 +54,7 @@
       /* Typography */
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --font-music: 'Noto Music', 'Bravura', -apple-system, sans-serif;
 
       /* Sizing & Transitions */
       --radius-sm: 4px;
@@ -950,7 +959,7 @@
       border-color: #323238;
       color: var(--accent-cyan);
     }
-    .pitch-key-btn.btn-active, .octave-key-btn.btn-active, .duration-key-btn.btn-active {
+    .pitch-key-btn.btn-active, .octave-key-btn.btn-active, .duration-key-btn.btn-active, .duration-modifier-btn.btn-active {
       background-color: #10b981 !important;
       background-image: none !important;
       background: #10b981 !important;
@@ -1016,13 +1025,69 @@
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 3px;
+      gap: 4px;
     }
-    .duration-key-btn {
-      padding: 3px 6px;
-      min-width: 34px;
-      font-size: 0.72rem;
+    .duration-key-btn, .duration-modifier-btn {
+      padding: 3px 6px 4px 6px;
+      min-width: 36px;
+      height: 40px;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0px;
       font-family: var(--font-mono);
+      cursor: pointer;
+      user-select: none;
+      transition: all var(--transition-fast);
+      position: relative;
+    }
+    .duration-modifier-btn {
+      min-width: 44px;
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .duration-modifier-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    .duration-key-btn .noto-music-glyph, .duration-modifier-btn .noto-music-glyph {
+      font-family: var(--font-music);
+      font-size: 1.35rem;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 20px;
+      pointer-events: none;
+    }
+    .duration-key-btn .duration-sub, .duration-modifier-btn .duration-sub {
+      font-size: 0.56rem;
+      font-family: var(--font-mono);
+      line-height: 1;
+      color: var(--text-muted);
+      letter-spacing: -0.02em;
+      pointer-events: none;
+      margin-top: 2px;
+    }
+    .duration-key-btn.btn-active .duration-sub, .duration-modifier-btn.btn-active .duration-sub {
+      color: #052e16 !important;
+      font-weight: 700 !important;
+    }
+    .duration-key-btn .duration-sup, .duration-modifier-btn .duration-sup {
+      font-size: 0.58rem;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      vertical-align: super;
+      margin-left: 1px;
+      line-height: 1;
+    }
+    .duration-key-btn .duration-dot, .duration-modifier-btn .duration-dot {
+      font-size: 0.68rem;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      margin-left: 1px;
+      line-height: 1;
     }
     .insert-action-group {
       display: flex;
@@ -1699,26 +1764,46 @@
           </div>
         </div>
 
-        <!-- Duration Presets (Task 2.1.3 Expanded Standard, Triplets, Dotted) -->
+        <!-- Duration Presets & Modifiers (MuseScore style Dotted & Triplet Toggles) -->
         <div class="duration-buttons-group" style="min-width: 280px;">
           <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px;">
             <span class="control-label">Duration</span>
-            <span style="font-size: 0.66rem; color: var(--text-muted);">Standard • Triplets • Dotted</span>
+            <span style="font-size: 0.66rem; color: var(--text-muted);">Standard • Modifiers (Dot / Triplet)</span>
           </div>
           <div class="duration-keys-row">
-            <button class="btn btn-sm duration-key-btn" data-duration="2.0" title="Whole Note (1/1)">1/1</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="1.0" title="Half Note (1/2)">1/2</button>
-            <button class="btn btn-sm duration-key-btn btn-active" data-duration="0.5" title="Quarter Note (1/4)">1/4</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.25" title="Eighth Note (1/8)">1/8</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.125" title="Sixteenth Note (1/16)">1/16</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.0625" title="Thirty-Second Note (1/32)">1/32</button>
-            <div style="width: 1px; height: 16px; background: var(--border-subtle); margin: 0 2px;"></div>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.3333" title="Quarter Triplet (1/4T)">1/4T</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.1667" title="Eighth Triplet (1/8T)">1/8T</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.0833" title="Sixteenth Triplet (1/16T)">1/16T</button>
-            <div style="width: 1px; height: 16px; background: var(--border-subtle); margin: 0 2px;"></div>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.75" title="Dotted Quarter (1/4.)">1/4.</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.375" title="Dotted Eighth (1/8.)">1/8.</button>
+            <button class="btn btn-sm duration-key-btn" data-duration="2.0" data-preset="1/1" title="Whole Note (1/1)">
+              <span class="noto-music-glyph">&#x1D15D;</span>
+              <span class="duration-sub">1/1</span>
+            </button>
+            <button class="btn btn-sm duration-key-btn" data-duration="1.0" data-preset="1/2" title="Half Note (1/2)">
+              <span class="noto-music-glyph">&#x1D15E;</span>
+              <span class="duration-sub">1/2</span>
+            </button>
+            <button class="btn btn-sm duration-key-btn btn-active" data-duration="0.5" data-preset="1/4" title="Quarter Note (1/4)">
+              <span class="noto-music-glyph">&#x1D15F;</span>
+              <span class="duration-sub">1/4</span>
+            </button>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.25" data-preset="1/8" title="Eighth Note (1/8)">
+              <span class="noto-music-glyph">&#x1D160;</span>
+              <span class="duration-sub">1/8</span>
+            </button>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.125" data-preset="1/16" title="Sixteenth Note (1/16)">
+              <span class="noto-music-glyph">&#x1D161;</span>
+              <span class="duration-sub">1/16</span>
+            </button>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.0625" data-preset="1/32" title="Thirty-Second Note (1/32)">
+              <span class="noto-music-glyph">&#x1D162;</span>
+              <span class="duration-sub">1/32</span>
+            </button>
+            <div style="width: 1px; height: 22px; background: var(--border-subtle); margin: 0 3px;"></div>
+            <button class="btn btn-sm duration-modifier-btn" id="btn-toggle-dotted" title="Toggle Dotted Note (Hotkey: .)">
+              <span class="noto-music-glyph" id="glyph-toggle-dotted">&#x1D15F;<span class="duration-dot">·</span></span>
+              <span class="duration-sub">Dot (.)</span>
+            </button>
+            <button class="btn btn-sm duration-modifier-btn" id="btn-toggle-triplet" title="Toggle Triplet Tuplet (Hotkey: 3 or T)">
+              <span class="noto-music-glyph" id="glyph-toggle-triplet">&#x1D15F;<sup class="duration-sup">3</sup></span>
+              <span class="duration-sub">Triplet (3)</span>
+            </button>
           </div>
         </div>
 
@@ -2047,6 +2132,8 @@
       pitchKeyBtns: document.querySelectorAll('.pitch-key-btn'),
       octaveKeyBtns: document.querySelectorAll('.octave-key-btn'),
       durationKeyBtns: document.querySelectorAll('.duration-key-btn'),
+      btnToggleDotted: document.getElementById('btn-toggle-dotted'),
+      btnToggleTriplet: document.getElementById('btn-toggle-triplet'),
       btnSimpleInsertNote: document.getElementById('btn-simple-insert-note'),
       btnSimpleUpdateNote: document.getElementById('btn-simple-update-note'),
       chkAutoAdvance: document.getElementById('chk-auto-advance'),
@@ -3105,7 +3192,69 @@
     // --- Simple Mode Note State & Ribbon Utilities ---
     let selectedPitchLetter = 'C';
     let selectedOctave = 4;
+    let selectedBaseDuration = 0.5; // Quarter note base default
+    let isDotted = false;
+    let isTriplet = false;
     let selectedDuration = 0.5;
+
+    const DURATION_GLYPHS = {
+      2.0: '&#x1D15D;',   // Whole
+      1.0: '&#x1D15E;',   // Half
+      0.5: '&#x1D15F;',   // Quarter
+      0.25: '&#x1D160;',  // Eighth
+      0.125: '&#x1D161;', // 16th
+      0.0625: '&#x1D162;' // 32nd
+    };
+
+    function getEffectiveDuration() {
+      let dur = selectedBaseDuration;
+      if (isDotted) {
+        dur *= 1.5;
+      } else if (isTriplet) {
+        dur *= (2 / 3);
+      }
+      return dur;
+    }
+
+    function decomposeDuration(durBeats) {
+      const basePresets = [2.0, 1.0, 0.5, 0.25, 0.125, 0.0625];
+      // Check exact / straight match first
+      for (const base of basePresets) {
+        if (Math.abs(durBeats - base) < 0.015) {
+          return { base, isDotted: false, isTriplet: false };
+        }
+      }
+      // Check dotted match (1.5x)
+      for (const base of basePresets) {
+        if (Math.abs(durBeats - (base * 1.5)) < 0.015) {
+          return { base, isDotted: true, isTriplet: false };
+        }
+      }
+      // Check triplet match (2/3x)
+      for (const base of basePresets) {
+        if (Math.abs(durBeats - (base * (2 / 3))) < 0.015) {
+          return { base, isDotted: false, isTriplet: true };
+        }
+      }
+      return null;
+    }
+
+    function applySelectedDurationToActiveNote() {
+      const state = store.getState();
+      const selId = state.view.selectedNoteId;
+      if (selId) {
+        const beatSec = 60 / state.tempo.bpm;
+        const noteDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
+        store.updateNote(selId, {
+          duration: noteDuration
+        });
+        renderSimpleNotesRibbon();
+        renderAnnotationTrack();
+        if (state.view.editorMode !== 'simple') {
+          renderPianoRollGrid();
+        }
+      }
+    }
 
     // Canonical pitch class normalizer to match 12 keypad buttons (C, C#, D, D#, E, F, F#, G, G#, A, A#, B)
     const KEYPAD_CANONICAL_PITCHES = {
@@ -3126,7 +3275,7 @@
       const state = store.getState();
       const activeScale = (state.theory && state.theory.activeScale) || 'none';
 
-      // If a note is currently selected, synchronize active pitch & octave from it
+      // If a note is currently selected, synchronize active pitch & octave & duration from it
       const selId = state.view.selectedNoteId;
       if (selId) {
         const selNote = state.notes.find(n => n.id === selId);
@@ -3137,6 +3286,17 @@
             if (match[2] !== undefined) {
               selectedOctave = parseInt(match[2], 10);
             }
+          }
+        }
+        if (selNote && selNote.duration) {
+          const beatSec = 60 / state.tempo.bpm;
+          const durBeats = (selNote.duration / beatSec) * 0.5;
+          const decomp = decomposeDuration(durBeats);
+          if (decomp) {
+            selectedBaseDuration = decomp.base;
+            isDotted = decomp.isDotted;
+            isTriplet = decomp.isTriplet;
+            selectedDuration = getEffectiveDuration();
           }
         }
       }
@@ -3164,8 +3324,24 @@
         b.classList.toggle('btn-active', parseInt(b.dataset.octave, 10) === selectedOctave);
       });
       el.durationKeyBtns.forEach(b => {
-        b.classList.toggle('btn-active', Math.abs(parseFloat(b.dataset.duration) - selectedDuration) < 0.005);
+        b.classList.toggle('btn-active', Math.abs(parseFloat(b.dataset.duration) - selectedBaseDuration) < 0.005);
       });
+      if (el.btnToggleDotted) {
+        el.btnToggleDotted.classList.toggle('btn-active', isDotted);
+        const glyphSpan = document.getElementById('glyph-toggle-dotted');
+        const baseGlyph = DURATION_GLYPHS[selectedBaseDuration] || '&#x1D15F;';
+        if (glyphSpan) {
+          glyphSpan.innerHTML = `${baseGlyph}<span class="duration-dot">·</span>`;
+        }
+      }
+      if (el.btnToggleTriplet) {
+        el.btnToggleTriplet.classList.toggle('btn-active', isTriplet);
+        const glyphSpan = document.getElementById('glyph-toggle-triplet');
+        const baseGlyph = DURATION_GLYPHS[selectedBaseDuration] || '&#x1D15F;';
+        if (glyphSpan) {
+          glyphSpan.innerHTML = `${baseGlyph}<sup class="duration-sup">3</sup>`;
+        }
+      }
     }
 
     function updateEditorModeView() {
@@ -4932,30 +5108,37 @@
       });
     });
 
-    // Duration Buttons
+    // Base Duration Buttons
     el.durationKeyBtns.forEach(btn => {
       btn.addEventListener('click', () => {
-        selectedDuration = parseFloat(btn.dataset.duration);
-
-        // If a note is selected in the store, immediately update its duration
-        const state = store.getState();
-        const selId = state.view.selectedNoteId;
-        if (selId) {
-          const beatSec = 60 / state.tempo.bpm;
-          const noteDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
-          store.updateNote(selId, {
-            duration: noteDuration
-          });
-          renderSimpleNotesRibbon();
-          renderAnnotationTrack();
-          if (state.view.editorMode !== 'simple') {
-            renderPianoRollGrid();
-          }
-        }
-
+        selectedBaseDuration = parseFloat(btn.dataset.duration);
+        selectedDuration = getEffectiveDuration();
+        applySelectedDurationToActiveNote();
         updateSelectedPitchDisplay();
       });
     });
+
+    // Dotted Toggle (MuseScore style)
+    if (el.btnToggleDotted) {
+      el.btnToggleDotted.addEventListener('click', () => {
+        isDotted = !isDotted;
+        if (isDotted) isTriplet = false;
+        selectedDuration = getEffectiveDuration();
+        applySelectedDurationToActiveNote();
+        updateSelectedPitchDisplay();
+      });
+    }
+
+    // Triplet Toggle (MuseScore style)
+    if (el.btnToggleTriplet) {
+      el.btnToggleTriplet.addEventListener('click', () => {
+        isTriplet = !isTriplet;
+        if (isTriplet) isDotted = false;
+        selectedDuration = getEffectiveDuration();
+        applySelectedDurationToActiveNote();
+        updateSelectedPitchDisplay();
+      });
+    }
 
     // Simple Pitch Text Box Input
     if (el.inputSimplePitch) {
@@ -5457,6 +5640,14 @@
       } else if (e.code === 'KeyU') {
         e.preventDefault();
         updateSelectedNoteFromCurrent();
+      } else if (e.code === 'Period') {
+        // MuseScore hotkey '.' for Dotted Note Toggle
+        e.preventDefault();
+        if (el.btnToggleDotted) el.btnToggleDotted.click();
+      } else if (e.code === 'KeyT' || ((e.ctrlKey || e.metaKey) && e.code === 'Digit3')) {
+        // MuseScore hotkey 'Ctrl+3' or 'T' for Triplet Tuplet Toggle
+        e.preventDefault();
+        if (el.btnToggleTriplet) el.btnToggleTriplet.click();
       } else if (e.code === 'KeyC' && !(e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         insertChordAtCursor();
@@ -5756,6 +5947,12 @@
       encodeMusicXml,
       exportLetterNotes,
       updateSelectedNoteFromCurrent,
+      getEffectiveDuration,
+      getSelectedBaseDuration: () => selectedBaseDuration,
+      isDotted: () => isDotted,
+      isTriplet: () => isTriplet,
+      toggleDotted: () => { if (el.btnToggleDotted) el.btnToggleDotted.click(); },
+      toggleTriplet: () => { if (el.btnToggleTriplet) el.btnToggleTriplet.click(); },
       MAJOR_SCALES,
       getScaleDegree,
       getDiatonicStep,

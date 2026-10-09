@@ -700,18 +700,52 @@
       background: rgba(16, 185, 129, 0.18);
       border: 1px solid var(--accent-emerald);
       border-radius: var(--radius-sm);
-      padding: 2px 3px;
+      padding: 2px 7px;
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       color: var(--text-primary);
-      cursor: pointer;
+      cursor: grab;
       user-select: none;
-      overflow: hidden;
-      min-width: 0;
-      transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+      overflow: visible;
+      min-width: 8px;
+      transition: box-shadow var(--transition-fast);
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+    .annotation-block.is-dragging {
+      cursor: grabbing !important;
+      opacity: 0.85;
+      z-index: 10;
+    }
+    .annotation-resize-handle {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 7px;
+      cursor: ew-resize;
+      z-index: 5;
+      opacity: 0;
+      background: rgba(255, 255, 255, 0.25);
+      transition: opacity var(--transition-fast), background var(--transition-fast);
+    }
+    .annotation-block:hover .annotation-resize-handle,
+    .annotation-block.is-selected .annotation-resize-handle {
+      opacity: 0.65;
+    }
+    .annotation-resize-handle:hover {
+      opacity: 1 !important;
+      background: #ffffff !important;
+    }
+    .resize-handle-left {
+      left: 0;
+      border-top-left-radius: var(--radius-sm);
+      border-bottom-left-radius: var(--radius-sm);
+    }
+    .resize-handle-right {
+      right: 0;
+      border-top-right-radius: var(--radius-sm);
+      border-bottom-right-radius: var(--radius-sm);
     }
     .annotation-block:hover {
       border-color: #fff;
@@ -760,20 +794,13 @@
       color: var(--accent-amber);
     }
 
-    /* --- Simple Mode Note Sequence Ribbon & Step Entry Bar --- */
+    /* --- Simple Mode Note Entry Bar --- */
     #simple-editor-card {
       display: flex;
       flex-direction: column;
     }
     .simple-notes-ribbon-container {
-      background: #0d0d10;
-      border-bottom: 1px solid var(--border-subtle);
-      overflow-x: auto;
-      overflow-y: hidden;
-      min-height: 84px;
-      display: flex;
-      align-items: center;
-      padding: 10px 14px;
+      display: none;
     }
     .simple-notes-ribbon {
       display: flex;
@@ -1460,6 +1487,16 @@
           <span class="status-dot" id="metronome-dot" style="background: var(--text-muted); width: 8px; height: 8px; border-radius: 50%; transition: background 0.08s ease, box-shadow 0.08s ease;"></span>
           <span id="metronome-beat-text" class="mono" style="font-size: 0.72rem; color: var(--text-muted); min-width: 22px;">1.1</span>
         </div>
+
+        <!-- First Downbeat 1.1 Alignment (Task 1.2) -->
+        <div style="display: flex; align-items: center; gap: 5px; margin-left: 6px; padding-left: 6px; border-left: 1px solid var(--border-subtle);" title="Align Measure 1.1 downbeat with first note in audio">
+          <button class="btn btn-sm" id="btn-set-beat-1" title="Lock Measure 1.1 to current playhead position" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 600;">Set Beat 1</button>
+          <div style="display: flex; align-items: center; gap: 3px;">
+            <span class="control-label" style="font-size: 0.7rem;">Offset</span>
+            <input type="number" id="input-grid-offset" min="0" max="600" step="0.01" value="0.00" class="mono" style="width: 58px; background: var(--bg-card); border: 1px solid var(--border-subtle); color: #fff; padding: 2px 4px; border-radius: var(--radius-sm); font-size: 0.8rem;" title="Start offset in seconds">
+            <span style="font-size: 0.68rem; color: var(--text-muted);">s</span>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -1513,20 +1550,13 @@
     <section class="card-panel" id="simple-editor-card" aria-label="Simple Note Letter Editor">
       <div class="card-header">
         <div class="card-title">
-          <span>Note Sequence Editor (Monophonic Letters)</span>
+          <span>Note Entry Bar &amp; Controls</span>
           <span class="badge badge-emerald" id="simple-badge-active-track">Melody Track</span>
           <span class="badge badge-cyan">1 Note at a Time</span>
         </div>
         <div class="transport-group">
           <span class="mono" id="simple-note-count" style="font-size: 0.78rem; color: var(--text-muted);">0 Notes</span>
           <button class="btn btn-sm" id="btn-clear-track-notes" title="Clear all transcribed notes on current track">Clear Notes</button>
-        </div>
-      </div>
-
-      <!-- Notes Sequence Ribbon -->
-      <div class="simple-notes-ribbon-container">
-        <div class="simple-notes-ribbon" id="simple-notes-ribbon">
-          <!-- Populated dynamically: Note Letter chips -->
         </div>
       </div>
 
@@ -1860,6 +1890,8 @@
       selectSnapDivision: document.getElementById('select-snap-division'),
       metronomeDot: document.getElementById('metronome-dot'),
       metronomeBeatText: document.getElementById('metronome-beat-text'),
+      btnSetBeat1: document.getElementById('btn-set-beat-1'),
+      inputGridOffset: document.getElementById('input-grid-offset'),
 
       // Waveform Viewport
       waveformViewport: document.getElementById('waveform-viewport'),
@@ -2511,8 +2543,50 @@
       }
       ctx.stroke();
 
+      // 3. Musical Measure Bar Lines & Beat divisions (offset by gridOffset) (Task 1.2.1)
+      const bpm = state.tempo.bpm || 120;
+      const timeSig = state.tempo.timeSignature || [4, 4];
+      const beatsPerMeasure = timeSig[0] || 4;
+      const beatSec = 60 / bpm;
+      const measureSec = beatSec * beatsPerMeasure;
+      const gridOffset = state.tempo.gridOffset || 0;
+
+      if (measureSec > 0 && width > 0) {
+        // Forward from gridOffset
+        for (let mTime = gridOffset, mIdx = 1; mTime <= duration; mTime += measureSec, mIdx++) {
+          if (mTime < 0) continue;
+          const mx = (mTime / duration) * width;
+          ctx.strokeStyle = (mIdx === 1) ? 'rgba(245, 158, 11, 0.75)' : 'rgba(56, 189, 248, 0.28)';
+          ctx.lineWidth = (mIdx === 1) ? 2 : 1;
+          ctx.beginPath();
+          ctx.moveTo(mx, 0);
+          ctx.lineTo(mx, height);
+          ctx.stroke();
+
+          // Bar number label
+          ctx.fillStyle = (mIdx === 1) ? '#f59e0b' : 'rgba(56, 189, 248, 0.8)';
+          ctx.font = 'bold 9px JetBrains Mono, monospace';
+          ctx.fillText(`M${mIdx}`, mx + 2, 9);
+        }
+
+        // Backward from gridOffset (pre-roll / pickup measures)
+        for (let mTime = gridOffset - measureSec, mIdx = 0; mTime >= 0; mTime -= measureSec, mIdx--) {
+          const mx = (mTime / duration) * width;
+          ctx.strokeStyle = 'rgba(245, 158, 11, 0.2)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(mx, 0);
+          ctx.lineTo(mx, height);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(245, 158, 11, 0.5)';
+          ctx.font = '9px JetBrains Mono, monospace';
+          ctx.fillText(`M${mIdx}`, mx + 2, 9);
+        }
+      }
+
       // Bottom subtle boundary
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, height - 0.5);
       ctx.lineTo(width, height - 0.5);
@@ -2531,151 +2605,203 @@
       const loop = state.playback.loop;
       const duration = state.audio.duration || 30;
 
-      if (!loop || (loop.start === 0 && loop.end === 0 && !loop.enabled)) {
-        return;
+      // Draw Loop Region if enabled or set
+      if (loop && (loop.start > 0 || loop.end > 0 || loop.enabled)) {
+        const startX = (Math.max(0, loop.start) / duration) * width;
+        const endX = (Math.min(duration, loop.end || duration) / duration) * width;
+
+        if (endX > startX) {
+          // Dim non-loop regions outside [A, B]
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          if (startX > 0) {
+            ctx.fillRect(0, 0, startX, height);
+          }
+          if (endX < width) {
+            ctx.fillRect(endX, 0, width - endX, height);
+          }
+
+          // Loop region fill & gradient tint
+          if (loop.enabled) {
+            const loopGrad = ctx.createLinearGradient(startX, 0, startX, height);
+            loopGrad.addColorStop(0, 'rgba(244, 63, 94, 0.22)');
+            loopGrad.addColorStop(1, 'rgba(244, 63, 94, 0.08)');
+            ctx.fillStyle = loopGrad;
+            ctx.fillRect(startX, 0, endX - startX, height);
+
+            // Top accent line
+            ctx.fillStyle = 'rgba(244, 63, 94, 0.7)';
+            ctx.fillRect(startX, 0, endX - startX, 2);
+          } else {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+            ctx.fillRect(startX, 0, endX - startX, height);
+          }
+
+          // Boundary vertical lines with glowing shadow
+          const strokeColor = loop.enabled ? '#f43f5e' : 'rgba(161, 161, 170, 0.4)';
+          ctx.save();
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = 2;
+          if (loop.enabled) {
+            ctx.shadowColor = 'rgba(244, 63, 94, 0.6)';
+            ctx.shadowBlur = 6;
+          }
+          ctx.beginPath();
+          ctx.moveTo(startX, 0);
+          ctx.lineTo(startX, height);
+          ctx.moveTo(endX, 0);
+          ctx.lineTo(endX, height);
+          ctx.stroke();
+          ctx.restore();
+
+          // Boundary marker flags (Rose #f43f5e)
+          const flagColor = loop.enabled ? '#f43f5e' : '#52525b';
+          const flagW = 22;
+          const flagH = 16;
+
+          // Marker Flag A (top-left aligned with startX)
+          ctx.fillStyle = flagColor;
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(startX, 0, flagW, flagH, [0, 0, 4, 0]);
+          } else {
+            ctx.rect(startX, 0, flagW, flagH);
+          }
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px JetBrains Mono, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('A ⇥', startX + flagW / 2, flagH / 2);
+
+          // Marker Flag B (top-right aligned with endX)
+          ctx.fillStyle = flagColor;
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(endX - flagW, 0, flagW, flagH, [0, 0, 0, 4]);
+          } else {
+            ctx.rect(endX - flagW, 0, flagW, flagH);
+          }
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText('⇤ B', endX - flagW / 2, flagH / 2);
+
+          // Draggable Handle Grips (Center of boundary lines)
+          const gripH = 24;
+          const gripW = 6;
+          const gripY = (height - gripH) / 2;
+
+          // Grip A
+          ctx.fillStyle = flagColor;
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(startX - gripW / 2, gripY, gripW, gripH, 3);
+          } else {
+            ctx.rect(startX - gripW / 2, gripY, gripW, gripH);
+          }
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(startX - 1, gripY + 6, 2, 2);
+          ctx.fillRect(startX - 1, gripY + 11, 2, 2);
+          ctx.fillRect(startX - 1, gripY + 16, 2, 2);
+
+          // Grip B
+          ctx.fillStyle = flagColor;
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(endX - gripW / 2, gripY, gripW, gripH, 3);
+          } else {
+            ctx.rect(endX - gripW / 2, gripY, gripW, gripH);
+          }
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(endX - 1, gripY + 6, 2, 2);
+          ctx.fillRect(endX - 1, gripY + 11, 2, 2);
+          ctx.fillRect(endX - 1, gripY + 16, 2, 2);
+
+          // Loop Info Pill in the top center if loop region is wide enough
+          if (endX - startX >= 110) {
+            const midX = (startX + endX) / 2;
+            const pillText = `${formatTimestamp(loop.start)} ⇄ ${formatTimestamp(loop.end)} (${(loop.end - loop.start).toFixed(2)}s)`;
+            ctx.font = 'bold 9px JetBrains Mono, monospace';
+            const textMetrics = ctx.measureText(pillText);
+            const pillW = textMetrics.width + 16;
+            const pillH = 16;
+            const pillY = 3;
+
+            ctx.fillStyle = 'rgba(18, 18, 21, 0.88)';
+            ctx.beginPath();
+            if (ctx.roundRect) {
+              ctx.roundRect(midX - pillW / 2, pillY, pillW, pillH, 8);
+            } else {
+              ctx.rect(midX - pillW / 2, pillY, pillW, pillH);
+            }
+            ctx.fill();
+
+            ctx.strokeStyle = loop.enabled ? 'rgba(244, 63, 94, 0.45)' : 'rgba(161, 161, 170, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.fillStyle = loop.enabled ? '#fda4af' : '#a1a1aa';
+            ctx.fillText(pillText, midX, pillY + pillH / 2);
+          }
+        }
       }
 
-      const startX = (Math.max(0, loop.start) / duration) * width;
-      const endX = (Math.min(duration, loop.end || duration) / duration) * width;
+      // Downbeat 1.1 Marker (Task 1.2.1)
+      const gridOffset = state.tempo.gridOffset || 0;
+      if (gridOffset >= 0 && gridOffset <= duration && duration > 0) {
+        const beat1X = (gridOffset / duration) * width;
+        ctx.save();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(beat1X, 0);
+        ctx.lineTo(beat1X, height);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-      if (endX <= startX) return;
-
-      // Dim non-loop regions outside [A, B]
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-      if (startX > 0) {
-        ctx.fillRect(0, 0, startX, height);
-      }
-      if (endX < width) {
-        ctx.fillRect(endX, 0, width - endX, height);
-      }
-
-      // Loop region fill & gradient tint
-      if (loop.enabled) {
-        const loopGrad = ctx.createLinearGradient(startX, 0, startX, height);
-        loopGrad.addColorStop(0, 'rgba(244, 63, 94, 0.22)');
-        loopGrad.addColorStop(1, 'rgba(244, 63, 94, 0.08)');
-        ctx.fillStyle = loopGrad;
-        ctx.fillRect(startX, 0, endX - startX, height);
-
-        // Top accent line
-        ctx.fillStyle = 'rgba(244, 63, 94, 0.7)';
-        ctx.fillRect(startX, 0, endX - startX, 2);
-      } else {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-        ctx.fillRect(startX, 0, endX - startX, height);
-      }
-
-      // Boundary vertical lines with glowing shadow
-      const strokeColor = loop.enabled ? '#f43f5e' : 'rgba(161, 161, 170, 0.4)';
-      ctx.save();
-      ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = 2;
-      if (loop.enabled) {
-        ctx.shadowColor = 'rgba(244, 63, 94, 0.6)';
-        ctx.shadowBlur = 6;
-      }
-      ctx.beginPath();
-      ctx.moveTo(startX, 0);
-      ctx.lineTo(startX, height);
-      ctx.moveTo(endX, 0);
-      ctx.lineTo(endX, height);
-      ctx.stroke();
-      ctx.restore();
-
-      // Boundary marker flags (Rose #f43f5e)
-      const flagColor = loop.enabled ? '#f43f5e' : '#52525b';
-      const flagW = 22;
-      const flagH = 16;
-
-      // Marker Flag A (top-left aligned with startX)
-      ctx.fillStyle = flagColor;
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(startX, 0, flagW, flagH, [0, 0, 4, 0]);
-      } else {
-        ctx.rect(startX, 0, flagW, flagH);
-      }
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 9px JetBrains Mono, monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('A ⇥', startX + flagW / 2, flagH / 2);
-
-      // Marker Flag B (top-right aligned with endX)
-      ctx.fillStyle = flagColor;
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(endX - flagW, 0, flagW, flagH, [0, 0, 0, 4]);
-      } else {
-        ctx.rect(endX - flagW, 0, flagW, flagH);
-      }
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText('⇤ B', endX - flagW / 2, flagH / 2);
-
-      // Draggable Handle Grips (Center of boundary lines)
-      const gripH = 24;
-      const gripW = 6;
-      const gripY = (height - gripH) / 2;
-
-      // Grip A
-      ctx.fillStyle = flagColor;
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(startX - gripW / 2, gripY, gripW, gripH, 3);
-      } else {
-        ctx.rect(startX - gripW / 2, gripY, gripW, gripH);
-      }
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(startX - 1, gripY + 6, 2, 2);
-      ctx.fillRect(startX - 1, gripY + 11, 2, 2);
-      ctx.fillRect(startX - 1, gripY + 16, 2, 2);
-
-      // Grip B
-      ctx.fillStyle = flagColor;
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(endX - gripW / 2, gripY, gripW, gripH, 3);
-      } else {
-        ctx.rect(endX - gripW / 2, gripY, gripW, gripH);
-      }
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(endX - 1, gripY + 6, 2, 2);
-      ctx.fillRect(endX - 1, gripY + 11, 2, 2);
-      ctx.fillRect(endX - 1, gripY + 16, 2, 2);
-
-      // Loop Info Pill in the top center if loop region is wide enough
-      if (endX - startX >= 110) {
-        const midX = (startX + endX) / 2;
-        const pillText = `${formatTimestamp(loop.start)} ⇄ ${formatTimestamp(loop.end)} (${(loop.end - loop.start).toFixed(2)}s)`;
-        ctx.font = 'bold 9px JetBrains Mono, monospace';
-        const textMetrics = ctx.measureText(pillText);
-        const pillW = textMetrics.width + 16;
-        const pillH = 16;
-        const pillY = 3;
-
-        ctx.fillStyle = 'rgba(18, 18, 21, 0.88)';
+        // Downbeat 1.1 Flag at top
+        const flagW = 28;
+        const flagH = 16;
+        ctx.fillStyle = '#f59e0b';
         ctx.beginPath();
         if (ctx.roundRect) {
-          ctx.roundRect(midX - pillW / 2, pillY, pillW, pillH, 8);
+          ctx.roundRect(beat1X - flagW / 2, 0, flagW, flagH, [0, 0, 4, 4]);
         } else {
-          ctx.rect(midX - pillW / 2, pillY, pillW, pillH);
+          ctx.rect(beat1X - flagW / 2, 0, flagW, flagH);
         }
         ctx.fill();
 
-        ctx.strokeStyle = loop.enabled ? 'rgba(244, 63, 94, 0.45)' : 'rgba(161, 161, 170, 0.3)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        ctx.fillStyle = '#09090b';
+        ctx.font = 'bold 9px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('1.1', beat1X, flagH / 2);
 
-        ctx.fillStyle = loop.enabled ? '#fda4af' : '#a1a1aa';
-        ctx.fillText(pillText, midX, pillY + pillH / 2);
+        // Center grip
+        const gripH = 20;
+        const gripW = 6;
+        const gripY = (height - gripH) / 2;
+        ctx.fillStyle = '#f59e0b';
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(beat1X - gripW / 2, gripY, gripW, gripH, 3);
+        } else {
+          ctx.rect(beat1X - gripW / 2, gripY, gripW, gripH);
+        }
+        ctx.fill();
+        ctx.fillStyle = '#09090b';
+        ctx.fillRect(beat1X - 1, gripY + 5, 2, 2);
+        ctx.fillRect(beat1X - 1, gripY + 9, 2, 2);
+        ctx.fillRect(beat1X - 1, gripY + 13, 2, 2);
+
+        ctx.restore();
       }
     }
+
 
     // --- Phase 6: Interactive Piano Roll View Engine ---
     let currentPianoRollTool = 'draw'; // 'draw' | 'erase'
@@ -2884,6 +3010,11 @@
       const state = store.getState();
       const isSimple = state.view.editorMode === 'simple';
 
+      // In Simple Mode: Annotation Track is visible beneath waveform
+      // In Piano Roll Mode: Annotation Track is hidden to maximize vertical space (Task 1.3.3)
+      if (el.annotationViewport) {
+        el.annotationViewport.style.display = isSimple ? 'block' : 'none';
+      }
       if (el.simpleEditorCard) {
         el.simpleEditorCard.style.display = isSimple ? 'flex' : 'none';
       }
@@ -2904,12 +3035,12 @@
           hasCenteredPianoRoll = true;
           requestAnimationFrame(centerPianoRollOnMiddleC);
         }
+      } else {
+        renderAnnotationTrack();
       }
     }
 
     function renderSimpleNotesRibbon() {
-      if (!el.simpleNotesRibbon) return;
-      el.simpleNotesRibbon.innerHTML = '';
       const state = store.getState();
       const trackId = state.view.activeTrackId;
       const trackNotes = state.notes.filter(n => n.trackId === trackId);
@@ -2921,54 +3052,12 @@
       if (el.simpleBadgeActiveTrack) {
         el.simpleBadgeActiveTrack.textContent = activeTrack ? `${activeTrack.name} Track` : 'Melody Track';
       }
-
-      trackNotes.forEach(note => {
-        const chip = document.createElement('div');
-        const isSelected = note.id === state.view.selectedNoteId;
-        const isPlaying = state.playback.isPlaying && state.playback.currentTime >= note.startTime && state.playback.currentTime < (note.startTime + note.duration);
-        const isRest = Boolean(note.isRest || note.pitchName === 'REST');
-
-        chip.className = `simple-note-chip ${isRest ? 'is-rest' : ''} ${isSelected ? 'selected' : ''} ${isPlaying ? 'is-playing' : ''}`;
-        chip.dataset.noteId = note.id;
-
-        const letterText = isRest ? '𝄽 Rest' : note.pitchName;
-        chip.innerHTML = `
-          <span class="simple-note-letter">${letterText}</span>
-          <div class="simple-note-meta mono">
-            <span>${formatTimestamp(note.startTime)}</span>
-            <span>${note.duration.toFixed(2)}s</span>
-          </div>
-          <button class="simple-note-del-btn" title="Delete ${isRest ? 'rest' : 'note'}">✕</button>
-        `;
-
-        chip.addEventListener('click', (e) => {
-          if (e.target.closest('.simple-note-del-btn')) return;
-          store.setSelectedNoteId(note.id);
-          store.setCurrentTime(note.startTime);
-          if (!isRest) {
-            const match = note.pitchName.match(/^([A-G]#?)(-?\d+)$/);
-            if (match) {
-              selectedPitchLetter = match[1];
-              selectedOctave = parseInt(match[2], 10);
-              updateSelectedPitchDisplay();
-            }
-            store.eventBus.emit('audition:note', { noteName: note.pitchName, midi: note.midi, duration: note.duration });
-          }
-          renderSimpleNotesRibbon();
-          renderAnnotationTrack();
-        });
-
-        chip.querySelector('.simple-note-del-btn').addEventListener('click', (e) => {
-          e.stopPropagation();
-          store.deleteNote(note.id);
-          renderSimpleNotesRibbon();
-          renderAnnotationTrack();
-          renderPianoRollGrid();
-        });
-
-        el.simpleNotesRibbon.appendChild(chip);
-      });
+      if (!el.simpleNotesRibbon) return;
+      el.simpleNotesRibbon.innerHTML = '';
     }
+
+    // Direct Annotation Track Manipulation State (Task 1.4)
+    let annotationDragState = null;
 
     function renderAnnotationTrack() {
       if (!el.annotationLane) return;
@@ -2982,10 +3071,13 @@
         const isRest = Boolean(note.isRest || note.pitchName === 'REST');
         const track = state.tracks.find(t => t.id === note.trackId) || state.tracks[0];
         const trackColor = track ? track.color : '#38bdf8';
+        const isSelected = (note.id === state.view.selectedNoteId);
 
         const block = document.createElement('div');
-        block.className = `annotation-block ${isRest ? 'is-rest' : ''}`;
-        if (note.id === state.view.selectedNoteId) {
+        block.className = `annotation-block ${isRest ? 'is-rest' : ''} ${isSelected ? 'is-selected' : ''}`;
+        block.dataset.noteId = note.id;
+
+        if (isSelected) {
           block.style.borderColor = '#fff';
           block.style.boxShadow = isRest ? '0 0 14px rgba(245, 158, 11, 0.5)' : `0 0 14px ${trackColor}80`;
         } else if (!isRest) {
@@ -2994,17 +3086,24 @@
         }
         block.style.left = `${leftPct}%`;
         block.style.width = `${widthPct}%`;
-        block.title = isRest ? `Rest (${formatTimestamp(note.startTime)}, ${note.duration.toFixed(2)}s)` : `${note.pitchName} • ${track ? track.name : ''} (${formatTimestamp(note.startTime)}, ${note.duration.toFixed(2)}s)`;
+        block.title = isRest ? `Rest (${formatTimestamp(note.startTime)}, ${note.duration.toFixed(2)}s)` : `${note.pitchName} • ${track ? track.name : ''} (${formatTimestamp(note.startTime)}, ${note.duration.toFixed(2)}s) • Drag to move, handles to resize, scroll to change pitch`;
 
         block.innerHTML = `
+          <div class="annotation-resize-handle resize-handle-left" title="Drag to adjust start time"></div>
           <span class="annotation-block-pitch" style="${isRest ? '' : `color: ${trackColor};`}">${isRest ? '𝄽 Rest' : note.pitchName}</span>
           ${note.chordLabel ? `<span class="annotation-block-chord">${note.chordLabel}</span>` : `<span class="annotation-block-chord">${note.duration.toFixed(2)}s</span>`}
+          <div class="annotation-resize-handle resize-handle-right" title="Drag to adjust duration"></div>
         `;
 
-        block.addEventListener('click', (e) => {
+        // Direct Drag-to-Move and Resize handling (Task 1.4.1 & 1.4.2)
+        block.addEventListener('mousedown', (e) => {
+          if (e.button !== 0) return;
           e.stopPropagation();
+
           store.setSelectedNoteId(note.id);
-          store.setCurrentTime(note.startTime);
+          // Preview note without shifting playback anchor (Task 1.2.2)
+          seekAudio(note.startTime, false);
+
           if (!isRest) {
             const match = note.pitchName.match(/^([A-G]#?)(-?\d+)$/);
             if (match) {
@@ -3012,11 +3111,44 @@
               selectedOctave = parseInt(match[2], 10);
               updateSelectedPitchDisplay();
             }
-            store.eventBus.emit('audition:note', { noteName: note.pitchName, midi: note.midi, duration: note.duration });
+            playNotePreview(note.midi, 0.2);
           }
-          renderSimpleNotesRibbon();
-          renderAnnotationTrack();
+
+          const isLeftHandle = e.target.classList.contains('resize-handle-left');
+          const isRightHandle = e.target.classList.contains('resize-handle-right');
+
+          annotationDragState = {
+            type: isLeftHandle ? 'resize-left' : (isRightHandle ? 'resize-right' : 'move'),
+            noteId: note.id,
+            origStart: note.startTime,
+            origDuration: note.duration,
+            startClientX: e.clientX,
+            hasMoved: false
+          };
+
+          if (annotationDragState.type === 'move') {
+            block.classList.add('is-dragging');
+          }
         });
+
+        // Mouse Wheel inside selected block transposes pitch (Task 1.4.3)
+        block.addEventListener('wheel', (e) => {
+          if (note.id !== store.getState().view.selectedNoteId || isRest) return;
+          e.preventDefault();
+          e.stopPropagation();
+
+          const dir = e.deltaY < 0 ? 1 : -1;
+          const curMidi = typeof note.midi === 'number' ? note.midi : noteNameToMidi(note.pitchName);
+          const newMidi = Math.max(21, Math.min(108, curMidi + dir));
+          const newPitch = midiToNoteName(newMidi);
+
+          store.updateNote(note.id, { midi: newMidi, pitchName: newPitch });
+          playNotePreview(newMidi, 0.25);
+          renderAnnotationTrack();
+          if (store.getState().view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
+        }, { passive: false });
 
         block.addEventListener('dblclick', (e) => {
           e.stopPropagation();
@@ -3082,6 +3214,9 @@
 
       // Tempo, Time Signature & Snap
       el.inputBpm.value = state.tempo.bpm;
+      if (el.inputGridOffset) {
+        el.inputGridOffset.value = (state.tempo.gridOffset || 0).toFixed(3);
+      }
       if (el.selectSnapDivision.value !== state.tempo.snap) {
         el.selectSnapDivision.value = state.tempo.snap;
         el.selectSnapDivision.dispatchEvent(new Event('change'));
@@ -3231,39 +3366,58 @@
       }
     }
 
-    // Audio Seeking & Transport helper
-    function seekAudio(seconds) {
+    // Audio Seeking & Transport helper (Task 1.2.2 Smart Playback Resume Anchor)
+    let lastPlaybackAnchorTime = 0;
+
+    function seekAudio(seconds, updateAnchor = true) {
       const duration = store.getState().audio.duration || 30;
       const clamped = Math.max(0, Math.min(duration, seconds));
       store.setCurrentTime(clamped);
       lastClockPlayheadTime = clamped;
+      if (updateAnchor) {
+        lastPlaybackAnchorTime = clamped;
+      }
       if (audioElement && !isNaN(audioElement.duration)) {
         audioElement.currentTime = clamped;
       }
       renderWaveform();
     }
 
-    // Transport buttons
-    el.btnPlayPause.addEventListener('click', () => {
+    function togglePlayback() {
       getAudioContext();
       initAudioPipeline();
-      store.setIsPlaying(!store.getState().playback.isPlaying);
+      const willPlay = !store.getState().playback.isPlaying;
+      if (willPlay) {
+        // Smart Playback Resume Anchor (Task 1.2.2):
+        // If playhead was shifted via note preview/audition without updating anchor, resume from anchor!
+        if (typeof lastPlaybackAnchorTime === 'number' && Math.abs(store.getState().playback.currentTime - lastPlaybackAnchorTime) > 0.005) {
+          seekAudio(lastPlaybackAnchorTime, false);
+        }
+      } else {
+        lastPlaybackAnchorTime = store.getState().playback.currentTime;
+      }
+      store.setIsPlaying(willPlay);
+    }
+
+    // Transport buttons
+    el.btnPlayPause.addEventListener('click', () => {
+      togglePlayback();
     });
     el.btnStopRewind.addEventListener('click', () => {
-      seekAudio(0);
+      seekAudio(0, true);
       store.setIsPlaying(false);
     });
     el.btnSkipBack1.addEventListener('click', () => {
-      seekAudio(store.getState().playback.currentTime - 1.0);
+      seekAudio(store.getState().playback.currentTime - 1.0, true);
     });
     el.btnSkipForward1.addEventListener('click', () => {
-      seekAudio(store.getState().playback.currentTime + 1.0);
+      seekAudio(store.getState().playback.currentTime + 1.0, true);
     });
     el.btnSkipBack5.addEventListener('click', () => {
-      seekAudio(store.getState().playback.currentTime - 5.0);
+      seekAudio(store.getState().playback.currentTime - 5.0, true);
     });
     el.btnSkipForward5.addEventListener('click', () => {
-      seekAudio(store.getState().playback.currentTime + 5.0);
+      seekAudio(store.getState().playback.currentTime + 5.0, true);
     });
 
     // Speed slider & Presets
@@ -3315,6 +3469,34 @@
         renderPianoRollGrid();
       }
     });
+
+    // Beat 1 Alignment (Task 1.2.1)
+    if (el.btnSetBeat1) {
+      el.btnSetBeat1.addEventListener('click', () => {
+        const cur = store.getState().playback.currentTime;
+        store.setGridOffset(cur);
+        if (el.inputGridOffset) el.inputGridOffset.value = cur.toFixed(3);
+        renderTimeRulerGrid();
+        renderLoopOverlay();
+        if (store.getState().view.editorMode !== 'simple') {
+          renderPianoRollGrid();
+        }
+        showToast(`Beat 1 locked to ${cur.toFixed(3)}s`, 'info');
+      });
+    }
+    if (el.inputGridOffset) {
+      el.inputGridOffset.addEventListener('change', (e) => {
+        const val = Math.max(0, parseFloat(e.target.value) || 0);
+        store.setGridOffset(val);
+        e.target.value = val.toFixed(3);
+        renderTimeRulerGrid();
+        renderLoopOverlay();
+        if (store.getState().view.editorMode !== 'simple') {
+          renderPianoRollGrid();
+        }
+      });
+    }
+
     if (el.selectTimeSignature) {
       el.selectTimeSignature.addEventListener('change', (e) => {
         const parts = e.target.value.split('/').map(Number);
@@ -3448,11 +3630,18 @@
       }, { passive: true });
     }
 
-    // --- Interactive Waveform Scrubbing, Seeking & A-B Range Selection (Task 2.3 & Task 4.1) ---
+    // --- Interactive Waveform Scrubbing, Seeking, Panning & A-B Range Selection (Tasks 1.1, 1.2 & 1.4) ---
     let isWaveformMouseDown = false;
+    let isScrubbing = false;
     let isSelectingLoopRange = false;
-    let waveformDragStart = null;
+    let isPanningViewport = false;
+    let panStartX = 0;
+    let panStartScrollLeft = 0;
     let draggingLoopMarker = null; // 'A' | 'B' | null
+    let draggingGridOffsetMarker = false;
+    let waveformDragStart = null;
+    let lastWaveformClickTime = 0;
+    let lastWaveformClickX = 0;
     let lastLoopRewindTimestamp = 0;
 
     function getTimeFromPointerEvent(e) {
@@ -3464,17 +3653,35 @@
       return ratio * duration;
     }
 
-    // Hover handle cursor management
+    // Hover handle cursor management & Shift pan indicator (Task 1.1.3 & Task 1.2.1)
     el.waveformViewport.addEventListener('mousemove', (e) => {
-      if (draggingLoopMarker || isWaveformMouseDown) return;
+      if (draggingLoopMarker || draggingGridOffsetMarker || isWaveformMouseDown || isPanningViewport) return;
       if (e.target.closest('#audio-dropzone')) return;
 
       const track = el.waveformTrack || el.waveformViewport;
       const rect = track.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const duration = store.getState().audio.duration || 30;
-      const loop = store.getState().playback.loop;
+      const state = store.getState();
+      const loop = state.playback.loop;
+      const gridOffset = state.tempo.gridOffset || 0;
 
+      // Shift held: pan grab cursor (Task 1.1.3)
+      if (e.shiftKey) {
+        el.waveformViewport.style.cursor = 'grab';
+        return;
+      }
+
+      // Check hover near 1.1 Downbeat Marker (Task 1.2.1)
+      if (gridOffset >= 0 && gridOffset <= duration && duration > 0) {
+        const beat1X = (gridOffset / duration) * rect.width;
+        if (Math.abs(clickX - beat1X) <= 12) {
+          el.waveformViewport.style.cursor = 'col-resize';
+          return;
+        }
+      }
+
+      // Check hover near loop boundary A or B (within 14px)
       if (loop.enabled || loop.start > 0 || loop.end > 0) {
         const startX = (loop.start / duration) * rect.width;
         const endX = ((loop.end || duration) / duration) * rect.width;
@@ -3486,15 +3693,56 @@
       el.waveformViewport.style.cursor = 'crosshair';
     });
 
+    // Shift key down/up cursor responsiveness
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Shift' && !isPanningViewport && !isWaveformMouseDown) {
+        if (el.waveformViewport && el.waveformViewport.matches(':hover')) {
+          el.waveformViewport.style.cursor = 'grab';
+        }
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'Shift' && !isPanningViewport && !isWaveformMouseDown) {
+        if (el.waveformViewport) {
+          el.waveformViewport.style.cursor = 'crosshair';
+        }
+      }
+    });
+
+    // Waveform mousedown: Panning, Scrubbing, Double-Click Looping, Marker Dragging
     el.waveformViewport.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+      annotationDragState = null;
       if (e.target.closest('#audio-dropzone')) return;
+
+      // Task 1.1.3: Viewport Panning via Middle-Click (e.button === 1) or Shift + Left-Click
+      if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+        e.preventDefault();
+        isPanningViewport = true;
+        panStartX = e.clientX;
+        panStartScrollLeft = el.waveformViewport.scrollLeft;
+        el.waveformViewport.style.cursor = 'grabbing';
+        return;
+      }
+
+      if (e.button !== 0) return;
 
       const track = el.waveformTrack || el.waveformViewport;
       const rect = track.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const duration = store.getState().audio.duration || 30;
-      const loop = store.getState().playback.loop;
+      const state = store.getState();
+      const loop = state.playback.loop;
+      const gridOffset = state.tempo.gridOffset || 0;
+
+      // Check if clicking near 1.1 Downbeat Marker (within 12px) (Task 1.2.1)
+      if (gridOffset >= 0 && gridOffset <= duration && duration > 0) {
+        const beat1X = (gridOffset / duration) * rect.width;
+        if (Math.abs(clickX - beat1X) <= 12) {
+          draggingGridOffsetMarker = true;
+          el.waveformViewport.style.cursor = 'col-resize';
+          return;
+        }
+      }
 
       // Check if clicking near loop boundary A or B (within 14px)
       if (loop.enabled || loop.start > 0 || loop.end > 0) {
@@ -3512,17 +3760,156 @@
         }
       }
 
+      const now = performance.now();
+      const isDoubleClick = (e.detail >= 2) || (now - lastWaveformClickTime < 340 && Math.abs(e.clientX - lastWaveformClickX) < 14);
+      lastWaveformClickTime = now;
+      lastWaveformClickX = e.clientX;
+
+      if (isDoubleClick) {
+        // Task 1.1.2: Double-Click & Drag initiates loop creation
+        isSelectingLoopRange = true;
+        isScrubbing = false;
+        const startTime = getTimeFromPointerEvent(e);
+        waveformDragStart = {
+          clientX: e.clientX,
+          time: startTime
+        };
+        store.setLoop(true, startTime, startTime);
+        renderLoopOverlay();
+        return;
+      }
+
+      // Task 1.1.1: Dedicated Left-Click Scrubbing & Seeking
+      // Seeks immediately on mousedown without waiting for drag
       isWaveformMouseDown = true;
+      isScrubbing = true;
       isSelectingLoopRange = false;
+      const targetTime = getTimeFromPointerEvent(e);
+      seekAudio(targetTime, true);
       waveformDragStart = {
         clientX: e.clientX,
-        time: getTimeFromPointerEvent(e)
+        time: targetTime
       };
     });
 
+    // Wheel navigation: Shift+Wheel = Horizontal Scroll, Ctrl+Wheel = Cursor-Centered Zoom (Task 1.1.4)
+    el.waveformViewport.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) {
+        // Zoom centered at mouse cursor
+        e.preventDefault();
+        const rect = el.waveformViewport.getBoundingClientRect();
+        const mouseViewportX = e.clientX - rect.left;
+        const currentZoom = store.getState().view.zoom || 1.0;
+        const oldTrackWidth = el.waveformTrack ? el.waveformTrack.clientWidth : (el.waveformViewport.clientWidth * currentZoom);
+        const trackX = el.waveformViewport.scrollLeft + mouseViewportX;
+        const ratio = trackX / Math.max(1, oldTrackWidth);
+
+        const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+        const newZoom = Math.max(0.5, Math.min(30, currentZoom * zoomFactor));
+        updateZoomView(newZoom);
+
+        const newTrackWidth = el.waveformTrack ? el.waveformTrack.clientWidth : (el.waveformViewport.clientWidth * newZoom);
+        const newTrackX = ratio * newTrackWidth;
+        const newScrollLeft = newTrackX - mouseViewportX;
+        el.waveformViewport.scrollLeft = Math.max(0, newScrollLeft);
+      } else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        // Horizontal scroll
+        e.preventDefault();
+        el.waveformViewport.scrollLeft += (e.deltaY || e.deltaX);
+      }
+    }, { passive: false });
+
+    if (el.annotationViewport) {
+      el.annotationViewport.addEventListener('wheel', (e) => {
+        if (e.target.closest('.annotation-block')) return;
+        if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+          e.preventDefault();
+          el.annotationViewport.scrollLeft += (e.deltaY || e.deltaX);
+        }
+      }, { passive: false });
+    }
+
+    // Global mousemove for all drag modes
     window.addEventListener('mousemove', (e) => {
+      // 1. Viewport Panning (Task 1.1.3)
+      if (isPanningViewport) {
+        const dx = e.clientX - panStartX;
+        const targetScroll = Math.max(0, panStartScrollLeft - dx);
+        el.waveformViewport.scrollLeft = targetScroll;
+        if (el.annotationViewport) {
+          el.annotationViewport.scrollLeft = targetScroll;
+        }
+        if (el.pianoRollGridContainer) {
+          el.pianoRollGridContainer.scrollLeft = targetScroll;
+        }
+        return;
+      }
+
+      // 2. Annotation Track Block Drag / Resize (Task 1.4.1 & 1.4.2)
+      if (annotationDragState) {
+        const track = el.annotationLane || el.waveformTrack || el.waveformViewport;
+        const rect = track.getBoundingClientRect();
+        const duration = store.getState().audio.duration || 30;
+        const dx = e.clientX - annotationDragState.startClientX;
+        const dTime = (dx / Math.max(1, rect.width)) * duration;
+        const bpm = store.getState().tempo.bpm || 120;
+        const snap = store.getState().tempo.snap || '1/8';
+        const gridOffset = store.getState().tempo.gridOffset || 0;
+
+        if (annotationDragState.type === 'move') {
+          let rawNewStart = Math.max(0, annotationDragState.origStart + dTime);
+          let finalStart = e.shiftKey ? rawNewStart : quantizeTime(rawNewStart, bpm, snap, gridOffset);
+          finalStart = Math.max(0, Math.min(Math.max(0, duration - annotationDragState.origDuration), finalStart));
+          store.updateNote(annotationDragState.noteId, { startTime: finalStart });
+          annotationDragState.hasMoved = true;
+          renderAnnotationTrack();
+          if (store.getState().view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
+        } else if (annotationDragState.type === 'resize-right') {
+          let rawNewEnd = Math.max(annotationDragState.origStart + 0.05, annotationDragState.origStart + annotationDragState.origDuration + dTime);
+          let finalEnd = e.shiftKey ? rawNewEnd : quantizeTime(rawNewEnd, bpm, snap, gridOffset);
+          finalEnd = Math.max(annotationDragState.origStart + 0.05, Math.min(duration, finalEnd));
+          const newDur = Math.max(0.05, finalEnd - annotationDragState.origStart);
+          store.updateNote(annotationDragState.noteId, { duration: newDur });
+          annotationDragState.hasMoved = true;
+          renderAnnotationTrack();
+          if (store.getState().view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
+        } else if (annotationDragState.type === 'resize-left') {
+          const origEnd = annotationDragState.origStart + annotationDragState.origDuration;
+          let rawNewStart = Math.max(0, Math.min(origEnd - 0.05, annotationDragState.origStart + dTime));
+          let finalStart = e.shiftKey ? rawNewStart : quantizeTime(rawNewStart, bpm, snap, gridOffset);
+          finalStart = Math.max(0, Math.min(origEnd - 0.05, finalStart));
+          const newDur = Math.max(0.05, origEnd - finalStart);
+          store.updateNote(annotationDragState.noteId, { startTime: finalStart, duration: newDur });
+          annotationDragState.hasMoved = true;
+          renderAnnotationTrack();
+          if (store.getState().view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
+        }
+        return;
+      }
+
+      // 3. Dragging Beat 1.1 Marker (Task 1.2.1)
+      if (draggingGridOffsetMarker) {
+        const duration = store.getState().audio.duration || 30;
+        const newOffset = Math.max(0, Math.min(duration, getTimeFromPointerEvent(e)));
+        store.setGridOffset(newOffset);
+        if (el.inputGridOffset) el.inputGridOffset.value = newOffset.toFixed(3);
+        renderTimeRulerGrid();
+        renderLoopOverlay();
+        if (store.getState().view.editorMode !== 'simple') {
+          renderPianoRollGrid();
+        }
+        return;
+      }
+
       const duration = store.getState().audio.duration || 30;
 
+      // 4. Dragging Loop A/B Handles
       if (draggingLoopMarker) {
         const newTime = getTimeFromPointerEvent(e);
         const curLoop = store.getState().playback.loop;
@@ -3537,44 +3924,58 @@
         return;
       }
 
-      if (isWaveformMouseDown && waveformDragStart) {
-        const dx = Math.abs(e.clientX - waveformDragStart.clientX);
-        if (dx > 6) {
-          isSelectingLoopRange = true;
-          const curTime = getTimeFromPointerEvent(e);
-          const a = Math.max(0, Math.min(waveformDragStart.time, curTime));
-          const b = Math.min(duration, Math.max(waveformDragStart.time, curTime));
-          if (b - a >= 0.05) {
-            store.setLoop(true, a, b);
-            renderLoopOverlay();
-          }
+      // 5. Double-Click & Drag Loop Creation (Task 1.1.2)
+      if (isSelectingLoopRange && waveformDragStart) {
+        const curTime = getTimeFromPointerEvent(e);
+        const a = Math.max(0, Math.min(waveformDragStart.time, curTime));
+        const b = Math.min(duration, Math.max(waveformDragStart.time, curTime));
+        if (b - a >= 0.05) {
+          store.setLoop(true, a, b);
+          renderLoopOverlay();
         }
-      }
-    });
-
-    window.addEventListener('mouseup', (e) => {
-      if (draggingLoopMarker) {
-        draggingLoopMarker = null;
         return;
       }
 
-      if (isWaveformMouseDown && waveformDragStart) {
-        isWaveformMouseDown = false;
-        if (isSelectingLoopRange) {
-          isSelectingLoopRange = false;
-          const duration = store.getState().audio.duration || 30;
-          const curTime = getTimeFromPointerEvent(e);
-          const a = Math.max(0, Math.min(waveformDragStart.time, curTime));
-          const b = Math.min(duration, Math.max(waveformDragStart.time, curTime));
-          if (b - a >= 0.05) {
-            store.setLoop(true, a, b);
-            seekAudio(a);
-            renderLoopOverlay();
-          }
-        } else {
-          // Plain click without drag: seek audio to clicked time
-          seekAudio(waveformDragStart.time);
+      // 6. Dedicated Continuous Scrubbing (Task 1.1.1)
+      if (isScrubbing && isWaveformMouseDown) {
+        const curTime = getTimeFromPointerEvent(e);
+        seekAudio(curTime, true);
+        return;
+      }
+    });
+
+    // Global mouseup for all drag modes
+    window.addEventListener('mouseup', (e) => {
+      if (isPanningViewport) {
+        isPanningViewport = false;
+        el.waveformViewport.style.cursor = e.shiftKey ? 'grab' : 'crosshair';
+      }
+
+      if (annotationDragState) {
+        document.querySelectorAll('.annotation-block.is-dragging').forEach(b => b.classList.remove('is-dragging'));
+        annotationDragState = null;
+      }
+
+      if (draggingGridOffsetMarker) {
+        draggingGridOffsetMarker = false;
+      }
+
+      if (draggingLoopMarker) {
+        draggingLoopMarker = null;
+      }
+
+      if (isSelectingLoopRange) {
+        isSelectingLoopRange = false;
+        const curLoop = store.getState().playback.loop;
+        if (curLoop.enabled && curLoop.end - curLoop.start >= 0.05) {
+          seekAudio(curLoop.start, true);
         }
+        waveformDragStart = null;
+      }
+
+      if (isScrubbing) {
+        isScrubbing = false;
+        isWaveformMouseDown = false;
         waveformDragStart = null;
       }
     });
@@ -3603,6 +4004,7 @@
         }
 
         store.setCurrentTime(curTime);
+        lastPlaybackAnchorTime = curTime;
 
         // Check Loop boundaries (Task 4.2 Seamless Loop Playback)
         const loop = state.playback.loop;
@@ -3678,20 +4080,21 @@
           }
         });
 
-        // Visual Metronome Pulse Indicator (Task 7.2)
+        // Visual Metronome Pulse Indicator (Task 1.2.1 & 7.2)
         if (el.metronomeDot && el.metronomeBeatText) {
           const bpm = state.tempo.bpm || 120;
           const timeSig = state.tempo.timeSignature || [4, 4];
           const beatsPerMeasure = timeSig[0] || 4;
           const beatSec = 60 / bpm;
-          const currentTotalBeats = curTime / beatSec;
+          const gridOffset = state.tempo.gridOffset || 0;
+          const currentTotalBeats = (curTime - gridOffset) / beatSec;
           const measureIdx = Math.floor(currentTotalBeats / beatsPerMeasure) + 1;
-          const beatInMeasure = (Math.floor(currentTotalBeats) % beatsPerMeasure) + 1;
+          const beatInMeasure = ((Math.floor(currentTotalBeats) % beatsPerMeasure) + beatsPerMeasure) % beatsPerMeasure + 1;
           el.metronomeBeatText.textContent = `${measureIdx}.${beatInMeasure}`;
 
           const beatFraction = currentTotalBeats - Math.floor(currentTotalBeats);
           const timeIntoBeat = beatFraction * beatSec;
-          if (timeIntoBeat < 0.12) {
+          if (timeIntoBeat < 0.12 && timeIntoBeat >= 0) {
             const isDownbeat = (beatInMeasure === 1);
             el.metronomeDot.style.background = isDownbeat ? 'var(--accent-amber)' : 'var(--accent-cyan)';
             el.metronomeDot.style.boxShadow = isDownbeat ? '0 0 10px var(--accent-amber)' : '0 0 8px var(--accent-cyan)';
@@ -4747,9 +5150,7 @@
 
       if (e.code === 'Space') {
         e.preventDefault();
-        getAudioContext();
-        initAudioPipeline();
-        store.setIsPlaying(!store.getState().playback.isPlaying);
+        togglePlayback();
       } else if (e.code === 'Home') {
         e.preventDefault();
         seekAudio(0);
@@ -5033,6 +5434,18 @@
       handleAudioFileSelected,
       updateZoomView,
       seekAudio,
+      togglePlayback,
+      getPlaybackAnchorTime: () => lastPlaybackAnchorTime,
+      setPlaybackAnchorTime: (t) => { lastPlaybackAnchorTime = t; },
+      getDragStates: () => ({
+        isScrubbing,
+        isWaveformMouseDown,
+        isSelectingLoopRange,
+        isPanningViewport,
+        draggingGridOffsetMarker,
+        draggingLoopMarker,
+        hasAnnotationDragState: typeof annotationDragState !== 'undefined' && !!annotationDragState
+      }),
       renderWaveform,
       renderTimeRulerGrid,
       renderLoopOverlay,
@@ -5063,6 +5476,7 @@
     window.handleAudioFileSelected = handleAudioFileSelected;
     window.updateZoomView = updateZoomView;
     window.seekAudio = seekAudio;
+    window.togglePlayback = togglePlayback;
     window.renderWaveform = renderWaveform;
     window.renderTimeRulerGrid = renderTimeRulerGrid;
     window.renderLoopOverlay = renderLoopOverlay;

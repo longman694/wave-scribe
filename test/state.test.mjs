@@ -64,6 +64,11 @@ describe('Audio Math & Music Utilities', () => {
     // Snap 1/16 (0.125s step)
     assert.equal(quantizeTime(0.13, bpm, '1/16'), 0.125);
     assert.equal(quantizeTime(0.26, bpm, '1/16'), 0.25);
+
+    // Snap with gridOffset (e.g. downbeat offset of 0.2s)
+    // 0.68s relative to 0.2s is 0.48s -> snaps to 0.5s beat -> absolute 0.7s
+    assert.equal(quantizeTime(0.68, bpm, '1/4', 0.2), 0.7);
+    assert.equal(quantizeTime(0.19, bpm, '1/4', 0.2), 0.2);
   });
 });
 
@@ -388,6 +393,26 @@ describe('Reactive Store & State Management', () => {
     const cannotDeleteLast = store.deleteTrack(store.getState().tracks[0].id);
     assert.equal(cannotDeleteLast, false);
     assert.equal(store.getState().tracks.length, 1);
+  });
+
+  test('setGridOffset updates tempo state and notifies subscribers', () => {
+    const store = new Store();
+    assert.equal(store.getState().tempo.gridOffset, 0);
+
+    let notifiedOffset = null;
+    store.subscribe((state, changeType, payload) => {
+      if (changeType === 'tempo:gridOffset') {
+        notifiedOffset = payload;
+      }
+    });
+
+    store.setGridOffset(0.75);
+    assert.equal(store.getState().tempo.gridOffset, 0.75);
+    assert.equal(notifiedOffset, 0.75);
+
+    // Negative values clamped to 0
+    store.setGridOffset(-0.5);
+    assert.equal(store.getState().tempo.gridOffset, 0);
   });
 });
 

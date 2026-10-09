@@ -93,10 +93,13 @@ export function formatTimestamp(seconds) {
  * @param {string} snapDivision - 'off', '1/4', '1/8', '1/16', '1/8T'
  * @returns {number} Quantized time in seconds
  */
-export function quantizeTime(timeSeconds, bpm, snapDivision) {
+export function quantizeTime(timeSeconds, bpm, snapDivision, gridOffset = 0) {
   if (snapDivision === 'off' || !snapDivision || bpm <= 0) {
     return timeSeconds;
   }
+
+  const offset = Number(gridOffset) || 0;
+  const relTime = timeSeconds - offset;
 
   const secondsPerBeat = 60 / bpm; // Quarter note duration
   let gridStepSeconds = secondsPerBeat;
@@ -118,7 +121,8 @@ export function quantizeTime(timeSeconds, bpm, snapDivision) {
       gridStepSeconds = secondsPerBeat / 4;
   }
 
-  return Math.round(timeSeconds / gridStepSeconds) * gridStepSeconds;
+  const snappedRel = Math.round(relTime / gridStepSeconds) * gridStepSeconds;
+  return Math.max(0, Math.round((snappedRel + offset) * 10000) / 10000);
 }
 
 // --- Event Bus ---
@@ -182,7 +186,8 @@ export const INITIAL_STATE = {
   tempo: {
     bpm: 120,
     timeSignature: [4, 4],
-    snap: '1/16' // 'off' | '1/4' | '1/8' | '1/16' | '1/8T'
+    snap: '1/16', // 'off' | '1/4' | '1/8' | '1/16' | '1/8T'
+    gridOffset: 0 // offset in seconds for Downbeat 1.1
   },
   view: {
     zoom: 1.0, // Multiplier (1.0 = fit or default)
@@ -433,6 +438,14 @@ export class Store {
       this.notify('tempo:snap', snap);
       this.eventBus.emit('tempo:snap', snap);
     }
+  }
+
+  setGridOffset(offsetSeconds) {
+    const clamped = Math.max(0, Math.round(Number(offsetSeconds || 0) * 1000) / 1000);
+    this.snapshotForHistory('Change Grid Offset');
+    this.state.tempo.gridOffset = clamped;
+    this.notify('tempo:gridOffset', clamped);
+    this.eventBus.emit('tempo:gridOffset', clamped);
   }
 
   // --- View & Navigation Actions ---

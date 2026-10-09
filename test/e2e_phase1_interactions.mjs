@@ -117,6 +117,9 @@ async function run() {
 
   async function evaluate(expression) {
     const res = await sendCdp('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+    if (res.exceptionDetails) {
+      throw new Error(`CDP Exception: ${res.exceptionDetails.text} (${res.exceptionDetails.exception?.description || ''})`);
+    }
     return res.result ? res.result.value : undefined;
   }
 

@@ -951,10 +951,78 @@
       color: var(--accent-cyan);
     }
     .pitch-key-btn.btn-active, .octave-key-btn.btn-active, .duration-key-btn.btn-active {
-      background: rgba(16, 185, 129, 0.2);
-      border-color: var(--accent-emerald);
-      color: var(--accent-emerald);
-      font-weight: 700;
+      background-color: #10b981 !important;
+      background-image: none !important;
+      background: #10b981 !important;
+      border-color: #ffffff !important;
+      color: #052e16 !important;
+      font-weight: 800 !important;
+      box-shadow: 0 0 14px rgba(16, 185, 129, 0.5), inset 0 0 0 1px #ffffff !important;
+      opacity: 1 !important;
+      filter: none !important;
+      transform: translateY(-1px);
+    }
+    .pitch-key-btn.is-scale-root.btn-active {
+      background-color: #38bdf8 !important;
+      background-image: none !important;
+      background: #38bdf8 !important;
+      border-color: #ffffff !important;
+      color: #042f2e !important;
+      font-weight: 800 !important;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.8), inset 0 0 0 1px #ffffff !important;
+      opacity: 1 !important;
+      filter: none !important;
+      transform: translateY(-1px);
+    }
+    .pitch-key-btn.is-scale-root.btn-active::after {
+      background: #042f2e !important;
+      color: var(--accent-cyan) !important;
+    }
+    /* Major Scale Engine Color Feedback (Task 2.2.2) */
+    .pitch-key-btn.is-scale-root:not(.btn-active) {
+      border-color: #38bdf8 !important;
+      color: #38bdf8 !important;
+      background: rgba(56, 189, 248, 0.16) !important;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.5) !important;
+      position: relative;
+    }
+    .pitch-key-btn.is-scale-root::after {
+      content: 'I';
+      position: absolute;
+      top: -5px;
+      right: -2px;
+      font-size: 0.52rem;
+      background: #38bdf8;
+      color: #0b0f19;
+      font-weight: 800;
+      padding: 0 3px;
+      border-radius: 3px;
+      line-height: 1.1;
+      pointer-events: none;
+    }
+    .pitch-key-btn.is-in-scale:not(.btn-active) {
+      color: #f8fafc;
+      border-color: rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .pitch-key-btn.is-out-of-scale:not(.btn-active) {
+      opacity: 0.35;
+      filter: grayscale(0.85);
+      color: var(--text-muted);
+      border-color: rgba(255, 255, 255, 0.08);
+      background: #0f1117;
+    }
+    .duration-keys-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 3px;
+    }
+    .duration-key-btn {
+      padding: 3px 6px;
+      min-width: 34px;
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
     }
     .insert-action-group {
       display: flex;
@@ -1355,6 +1423,7 @@
       <button class="btn btn-sm" id="btn-session-export" title="Export Session JSON">Save JSON</button>
       <button class="btn btn-sm" id="btn-export-midi" title="Export Standard MIDI (.mid)">Export MIDI</button>
       <button class="btn btn-sm" id="btn-export-musicxml" title="Export MusicXML">Export XML</button>
+      <button class="btn btn-sm" id="btn-export-letter-notes" title="Export Rhythmic Dash-Grid Letter Notes (.txt)" style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); font-weight: 600;">Letter Notes</button>
 
       <div class="transport-divider"></div>
 
@@ -1482,6 +1551,14 @@
           <option value="1/8T">1/8 Triplet</option>
         </select>
 
+        <span class="control-label" style="margin-left: 4px;">Swing</span>
+        <select id="select-swing" title="Swing Rhythm Groove (Task 2.3)">
+          <option value="0.5" selected>Straight (50%)</option>
+          <option value="0.58">Light (58%)</option>
+          <option value="0.66">Triplet (66%)</option>
+          <option value="0.75">Hard (75%)</option>
+        </select>
+
         <!-- Visual Metronome Pulse Indicator (Task 7.2) -->
         <div class="metronome-badge" id="metronome-indicator" title="Visual Metronome Pulse" style="display: flex; align-items: center; gap: 5px; padding: 2px 6px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-left: 4px;">
           <span class="status-dot" id="metronome-dot" style="background: var(--text-muted); width: 8px; height: 8px; border-radius: 50%; transition: background 0.08s ease, box-shadow 0.08s ease;"></span>
@@ -1571,6 +1648,26 @@
           </div>
         </div>
 
+        <!-- Major Scale Key Selector (Task 2.2.1) -->
+        <div class="scale-selector-box" style="display: flex; flex-direction: column; gap: 4px;">
+          <span class="control-label">Major Scale</span>
+          <select class="control-select" id="select-scale" title="Filter &amp; highlight by Major Scale Key (Task 2.2)" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600;">
+            <option value="none">Chromatic / None</option>
+            <option value="C">C Major</option>
+            <option value="G">G Major (1#)</option>
+            <option value="D">D Major (2#)</option>
+            <option value="A">A Major (3#)</option>
+            <option value="E">E Major (4#)</option>
+            <option value="B">B Major (5#)</option>
+            <option value="F">F Major (1b)</option>
+            <option value="Bb">Bb Major (2b)</option>
+            <option value="Eb">Eb Major (3b)</option>
+            <option value="Ab">Ab Major (4b)</option>
+            <option value="Db">Db Major (5b)</option>
+            <option value="Gb">Gb Major (6b)</option>
+          </select>
+        </div>
+
         <!-- 12 Pitch Buttons -->
         <div class="pitch-buttons-group">
           <span class="control-label">Pitch</span>
@@ -1602,25 +1699,36 @@
           </div>
         </div>
 
-        <!-- Duration Presets -->
-        <div class="duration-buttons-group">
-          <span class="control-label">Duration</span>
+        <!-- Duration Presets (Task 2.1.3 Expanded Standard, Triplets, Dotted) -->
+        <div class="duration-buttons-group" style="min-width: 280px;">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px;">
+            <span class="control-label">Duration</span>
+            <span style="font-size: 0.66rem; color: var(--text-muted);">Standard • Triplets • Dotted</span>
+          </div>
           <div class="duration-keys-row">
-            <button class="btn btn-sm duration-key-btn" data-duration="0.125" title="1/16 Note">1/16</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.25" title="1/8 Note">1/8</button>
-            <button class="btn btn-sm duration-key-btn btn-active" data-duration="0.5" title="1/4 Note (Beat)">1/4</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="1.0" title="1/2 Note">1/2</button>
-            <button class="btn btn-sm duration-key-btn" data-duration="2.0" title="1 Whole Bar">1 Bar</button>
+            <button class="btn btn-sm duration-key-btn" data-duration="2.0" title="Whole Note (1/1)">1/1</button>
+            <button class="btn btn-sm duration-key-btn" data-duration="1.0" title="Half Note (1/2)">1/2</button>
+            <button class="btn btn-sm duration-key-btn btn-active" data-duration="0.5" title="Quarter Note (1/4)">1/4</button>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.25" title="Eighth Note (1/8)">1/8</button>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.125" title="Sixteenth Note (1/16)">1/16</button>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.0625" title="Thirty-Second Note (1/32)">1/32</button>
+            <div style="width: 1px; height: 16px; background: var(--border-subtle); margin: 0 2px;"></div>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.3333" title="Quarter Triplet (1/4T)">1/4T</button>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.1667" title="Eighth Triplet (1/8T)">1/8T</button>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.0833" title="Sixteenth Triplet (1/16T)">1/16T</button>
+            <div style="width: 1px; height: 16px; background: var(--border-subtle); margin: 0 2px;"></div>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.75" title="Dotted Quarter (1/4.)">1/4.</button>
+            <button class="btn btn-sm duration-key-btn" data-duration="0.375" title="Dotted Eighth (1/8.)">1/8.</button>
           </div>
         </div>
 
-        <!-- Insert Action & Auto-advance -->
+        <!-- Insert Action vs. Update Selected (Task 2.1.2) -->
         <div class="insert-action-group">
-          <button class="btn btn-primary" id="btn-simple-insert-note" title="Insert Single Note at Playhead (N)">
+          <button class="btn btn-primary" id="btn-simple-insert-note" title="Insert Note at Playhead (N or Enter)">
             <span>+ Insert Note (N)</span>
           </button>
-          <button class="btn btn-secondary" id="btn-simple-insert-rest" title="Insert Musical Rest at Playhead (R)">
-            <span>𝄽 Insert Rest (R)</span>
+          <button class="btn btn-secondary" id="btn-simple-update-note" title="Update Selected Note with Active Pitch &amp; Duration (U)">
+            <span>✎ Update Selected (U)</span>
           </button>
           <label class="auto-advance-label" title="Automatically advance playhead by duration after inserting">
             <input type="checkbox" id="chk-auto-advance" checked>
@@ -1639,7 +1747,7 @@
         </div>
         <div class="transport-group">
           <button class="btn btn-sm btn-primary" id="btn-add-note-at-cursor" title="Insert Note at Playhead (N)">+ Insert Note (N)</button>
-          <button class="btn btn-sm" id="btn-add-rest-at-cursor" title="Insert Musical Rest at Playhead (R)">𝄽 Rest (R)</button>
+          <button class="btn btn-sm" id="btn-update-selected-piano-roll" title="Update Selected Note (U)">✎ Update (U)</button>
           <button class="btn btn-sm" id="btn-add-chord-at-cursor" title="Insert Chord Marker (C)">+ Chord Marker (C)</button>
           <div class="transport-divider"></div>
           <button class="btn btn-sm btn-active" id="btn-tool-draw">Draw</button>
@@ -1721,7 +1829,7 @@
 
           <tr class="shortcut-section"><td colspan="2">Transcription &amp; Note Entry</td></tr>
           <tr><td><kbd>N</kbd> or <kbd>Enter</kbd></td><td>Insert single note at current playhead</td></tr>
-          <tr><td><kbd>R</kbd></td><td>Insert musical rest (silence) at current playhead</td></tr>
+          <tr><td><kbd>U</kbd></td><td>Update selected note with active pitch &amp; duration</td></tr>
           <tr><td><kbd>C</kbd></td><td>Insert chord marker at current playhead</td></tr>
           <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete selected transcribed note(s)</td></tr>
           <tr><td><kbd>Up</kbd> / <kbd>Down</kbd></td><td>Transpose selected note by ±1 semitone (in Piano Roll)</td></tr>
@@ -1759,7 +1867,7 @@
         <input type="hidden" id="edit-note-id">
         <div style="display: flex; gap: 12px;">
           <div style="flex: 1;">
-            <label class="control-label" style="display: block; margin-bottom: 6px;">Pitch (e.g. C4, F#3, REST)</label>
+            <label class="control-label" style="display: block; margin-bottom: 6px;">Pitch (e.g. C4, F#3, Bb4)</label>
             <input type="text" id="edit-note-pitch" class="mono" style="width: 100%; background: var(--bg-card); border: 1px solid var(--border-subtle); color: #fff; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 0.95rem;">
           </div>
           <div style="width: 130px;">
@@ -1796,7 +1904,13 @@
       EventBus,
       Store,
       NOTE_NAMES,
-      TRACK_COLORS
+      TRACK_COLORS,
+      MAJOR_SCALES,
+      getScaleDegree,
+      isNoteInScale,
+      getDiatonicStep,
+      midiToScalePitchName,
+      exportLetterNotes
     } from './src/state.js';
 
     import { encodeMidi } from './src/midi-encoder.js';
@@ -1829,6 +1943,7 @@
       btnSessionExport: document.getElementById('btn-session-export'),
       btnExportMidi: document.getElementById('btn-export-midi'),
       btnExportMusicXml: document.getElementById('btn-export-musicxml'),
+      btnExportLetterNotes: document.getElementById('btn-export-letter-notes'),
       btnUndo: document.getElementById('btn-undo'),
       btnRedo: document.getElementById('btn-redo'),
       btnShortcutsHelp: document.getElementById('btn-shortcuts-help'),
@@ -1888,6 +2003,7 @@
       btnTapTempo: document.getElementById('btn-tap-tempo'),
       selectTimeSignature: document.getElementById('select-time-signature'),
       selectSnapDivision: document.getElementById('select-snap-division'),
+      selectSwing: document.getElementById('select-swing'),
       metronomeDot: document.getElementById('metronome-dot'),
       metronomeBeatText: document.getElementById('metronome-beat-text'),
       btnSetBeat1: document.getElementById('btn-set-beat-1'),
@@ -1912,6 +2028,7 @@
       annotationViewport: document.getElementById('annotation-viewport'),
       annotationLane: document.getElementById('annotation-lane'),
       btnAddNoteAtCursor: document.getElementById('btn-add-note-at-cursor'),
+      btnUpdateSelectedPianoRoll: document.getElementById('btn-update-selected-piano-roll'),
       btnAddChordAtCursor: document.getElementById('btn-add-chord-at-cursor'),
       toastContainer: document.getElementById('toast-container'),
 
@@ -1926,12 +2043,12 @@
       btnClearTrackNotes: document.getElementById('btn-clear-track-notes'),
       inputSimplePitch: document.getElementById('input-simple-pitch'),
       btnAuditionPitch: document.getElementById('btn-audition-pitch'),
+      selectScale: document.getElementById('select-scale'),
       pitchKeyBtns: document.querySelectorAll('.pitch-key-btn'),
       octaveKeyBtns: document.querySelectorAll('.octave-key-btn'),
       durationKeyBtns: document.querySelectorAll('.duration-key-btn'),
       btnSimpleInsertNote: document.getElementById('btn-simple-insert-note'),
-      btnSimpleInsertRest: document.getElementById('btn-simple-insert-rest'),
-      btnAddRestAtCursor: document.getElementById('btn-add-rest-at-cursor'),
+      btnSimpleUpdateNote: document.getElementById('btn-simple-update-note'),
       chkAutoAdvance: document.getElementById('chk-auto-advance'),
 
       // Piano Roll
@@ -2990,19 +3107,64 @@
     let selectedOctave = 4;
     let selectedDuration = 0.5;
 
+    // Canonical pitch class normalizer to match 12 keypad buttons (C, C#, D, D#, E, F, F#, G, G#, A, A#, B)
+    const KEYPAD_CANONICAL_PITCHES = {
+      'DB': 'C#',
+      'EB': 'D#',
+      'GB': 'F#',
+      'AB': 'G#',
+      'BB': 'A#'
+    };
+
+    function toKeypadPitchClass(pitch) {
+      if (!pitch) return 'C';
+      const clean = pitch.trim().toUpperCase();
+      return KEYPAD_CANONICAL_PITCHES[clean] || clean;
+    }
+
     function updateSelectedPitchDisplay() {
+      const state = store.getState();
+      const activeScale = (state.theory && state.theory.activeScale) || 'none';
+
+      // If a note is currently selected, synchronize active pitch & octave from it
+      const selId = state.view.selectedNoteId;
+      if (selId) {
+        const selNote = state.notes.find(n => n.id === selId);
+        if (selNote && !selNote.isRest && selNote.pitchName !== 'REST') {
+          const match = selNote.pitchName.match(/^([A-Ga-g][#b]?)(-?\d+)?$/);
+          if (match) {
+            selectedPitchLetter = toKeypadPitchClass(match[1]);
+            if (match[2] !== undefined) {
+              selectedOctave = parseInt(match[2], 10);
+            }
+          }
+        }
+      }
+
+      const canonicalSelected = toKeypadPitchClass(selectedPitchLetter);
       const pitchStr = `${selectedPitchLetter}${selectedOctave}`;
       if (el.inputSimplePitch) {
         el.inputSimplePitch.value = pitchStr;
       }
       el.pitchKeyBtns.forEach(b => {
-        b.classList.toggle('btn-active', b.dataset.pitch === selectedPitchLetter);
+        const pitch = b.dataset.pitch;
+        b.classList.toggle('btn-active', toKeypadPitchClass(pitch) === canonicalSelected);
+
+        // Task 2.2.2: Dynamic Color Feedback on Keypad
+        if (activeScale === 'none') {
+          b.classList.remove('is-scale-root', 'is-in-scale', 'is-out-of-scale');
+        } else {
+          const analysis = getScaleDegree(pitch, activeScale);
+          b.classList.toggle('is-scale-root', analysis.isRoot);
+          b.classList.toggle('is-in-scale', analysis.inScale && !analysis.isRoot);
+          b.classList.toggle('is-out-of-scale', !analysis.inScale);
+        }
       });
       el.octaveKeyBtns.forEach(b => {
         b.classList.toggle('btn-active', parseInt(b.dataset.octave, 10) === selectedOctave);
       });
       el.durationKeyBtns.forEach(b => {
-        b.classList.toggle('btn-active', Math.abs(parseFloat(b.dataset.duration) - selectedDuration) < 0.001);
+        b.classList.toggle('btn-active', Math.abs(parseFloat(b.dataset.duration) - selectedDuration) < 0.005);
       });
     }
 
@@ -3105,10 +3267,12 @@
           seekAudio(note.startTime, false);
 
           if (!isRest) {
-            const match = note.pitchName.match(/^([A-G]#?)(-?\d+)$/);
+            const match = note.pitchName.match(/^([A-Ga-g][#b]?)(-?\d+)?$/);
             if (match) {
-              selectedPitchLetter = match[1];
-              selectedOctave = parseInt(match[2], 10);
+              selectedPitchLetter = toKeypadPitchClass(match[1]);
+              if (match[2] !== undefined) {
+                selectedOctave = parseInt(match[2], 10);
+              }
               updateSelectedPitchDisplay();
             }
             playNotePreview(note.midi, 0.2);
@@ -3131,7 +3295,7 @@
           }
         });
 
-        // Mouse Wheel inside selected block transposes pitch (Task 1.4.3)
+        // Mouse Wheel inside selected block transposes pitch (Task 1.4.3 & Task 2.2.3)
         block.addEventListener('wheel', (e) => {
           if (note.id !== store.getState().view.selectedNoteId || isRest) return;
           e.preventDefault();
@@ -3139,8 +3303,19 @@
 
           const dir = e.deltaY < 0 ? 1 : -1;
           const curMidi = typeof note.midi === 'number' ? note.midi : noteNameToMidi(note.pitchName);
-          const newMidi = Math.max(21, Math.min(108, curMidi + dir));
-          const newPitch = midiToNoteName(newMidi);
+          const activeScale = (store.getState().theory && store.getState().theory.activeScale) || 'none';
+
+          let newMidi;
+          let newPitch;
+          if (e.altKey || activeScale === 'none') {
+            // Chromatic semitone step when Alt is pressed or scale is none
+            newMidi = Math.max(21, Math.min(108, curMidi + dir));
+            newPitch = midiToNoteName(newMidi);
+          } else {
+            // Scale-aware diatonic step (Task 2.2.3)
+            newMidi = getDiatonicStep(curMidi, dir, activeScale);
+            newPitch = midiToScalePitchName(newMidi, activeScale);
+          }
 
           store.updateNote(note.id, { midi: newMidi, pitchName: newPitch });
           playNotePreview(newMidi, 0.25);
@@ -3228,6 +3403,17 @@
           el.selectTimeSignature.dispatchEvent(new Event('change'));
         }
       }
+      if (el.selectSwing && state.tempo && state.tempo.swingFactor !== undefined) {
+        if (Math.abs(parseFloat(el.selectSwing.value) - state.tempo.swingFactor) > 0.01) {
+          el.selectSwing.value = String(state.tempo.swingFactor);
+        }
+      }
+      if (el.selectScale && state.theory && state.theory.activeScale) {
+        if (el.selectScale.value !== state.theory.activeScale) {
+          el.selectScale.value = state.theory.activeScale;
+        }
+      }
+      updateSelectedPitchDisplay();
 
       // Undo / Redo buttons
       el.btnUndo.disabled = !store.canUndo();
@@ -3510,6 +3696,12 @@
     el.selectSnapDivision.addEventListener('change', (e) => {
       store.setSnap(e.target.value);
     });
+    if (el.selectSwing) {
+      el.selectSwing.addEventListener('change', (e) => {
+        store.setSwingFactor(parseFloat(e.target.value));
+        renderTimeRulerGrid();
+      });
+    }
 
     // Tap tempo tool (Task 7.2)
     let tapTimes = [];
@@ -4549,16 +4741,25 @@
       }
     });
 
+    store.eventBus.on('view:selectedNote', () => {
+      updateSelectedPitchDisplay();
+    });
+
     // Note Insertion (N key or Button) - Enforces 1 note at a time in Simple Mode
     function insertNoteAtCursor() {
       const state = store.getState();
       const snap = state.tempo.snap;
-      const snappedStart = quantizeTime(state.playback.currentTime, state.tempo.bpm, snap);
+      const gridOffset = state.tempo.gridOffset || 0;
+      const swingFactor = state.tempo.swingFactor || 0.5;
+      const snappedStart = quantizeTime(state.playback.currentTime, state.tempo.bpm, snap, gridOffset, swingFactor);
 
       // Duration calculated from selectedDuration preset (normalized to BPM)
       const beatSec = 60 / state.tempo.bpm;
       const noteDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
-      const pitchName = `${selectedPitchLetter}${selectedOctave}`;
+      const activeScale = (state.theory && state.theory.activeScale) || 'none';
+      const rawPitch = `${selectedPitchLetter}${selectedOctave}`;
+      const midi = noteNameToMidi(rawPitch);
+      const pitchName = midiToScalePitchName(midi, activeScale);
 
       const note = store.addNote({
         trackId: state.view.activeTrackId,
@@ -4588,35 +4789,40 @@
     }
     el.btnAddNoteAtCursor.addEventListener('click', insertNoteAtCursor);
 
-    // Musical Rest Insertion (R key or Button) - Adds silence of selected duration
-    function insertRestAtCursor() {
+    // Update Selected Note from Active Pitch & Duration (Task 2.1.2)
+    function updateSelectedNoteFromCurrent() {
       const state = store.getState();
-      const snap = state.tempo.snap;
-      const snappedStart = quantizeTime(state.playback.currentTime, state.tempo.bpm, snap);
-
-      const beatSec = 60 / state.tempo.bpm;
-      const restDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
-
-      const rest = store.addRest({
-        trackId: state.view.activeTrackId,
-        startTime: snappedStart,
-        duration: restDuration
-      }, { monophonic: state.view.editorMode === 'simple' });
-
-      // Auto-advance playhead
-      if (el.chkAutoAdvance && el.chkAutoAdvance.checked) {
-        const nextTime = Math.round((snappedStart + restDuration) * 10000) / 10000;
-        store.setCurrentTime(nextTime);
+      const selId = state.view.selectedNoteId;
+      if (!selId) {
+        showToast('Please select a note to update first', 'info');
+        return;
       }
+      const note = state.notes.find(n => n.id === selId);
+      if (!note) return;
 
+      const activeScale = (state.theory && state.theory.activeScale) || 'none';
+      const beatSec = 60 / state.tempo.bpm;
+      const noteDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
+      const rawPitch = `${selectedPitchLetter}${selectedOctave}`;
+      const midi = noteNameToMidi(rawPitch);
+      const pitchName = midiToScalePitchName(midi, activeScale);
+
+      store.updateNote(selId, {
+        pitchName,
+        midi,
+        duration: noteDuration
+      });
+
+      playNotePreview(midi, 0.25);
+      showToast(`Updated note to ${pitchName} (${noteDuration.toFixed(2)}s)`, 'success');
       renderSimpleNotesRibbon();
       renderAnnotationTrack();
       if (state.view.editorMode !== 'simple') {
         renderPianoRollGrid();
       }
     }
-    if (el.btnSimpleInsertRest) el.btnSimpleInsertRest.addEventListener('click', insertRestAtCursor);
-    if (el.btnAddRestAtCursor) el.btnAddRestAtCursor.addEventListener('click', insertRestAtCursor);
+    if (el.btnSimpleUpdateNote) el.btnSimpleUpdateNote.addEventListener('click', updateSelectedNoteFromCurrent);
+    if (el.btnUpdateSelectedPianoRoll) el.btnUpdateSelectedPianoRoll.addEventListener('click', updateSelectedNoteFromCurrent);
 
     // Chord Marker Insertion (C key or Button)
     function insertChordAtCursor() {
@@ -4656,10 +4862,38 @@
       });
     }
 
+    // Major Scale Selector (Task 2.2.1)
+    if (el.selectScale) {
+      el.selectScale.addEventListener('change', (e) => {
+        store.setActiveScale(e.target.value);
+        updateSelectedPitchDisplay();
+      });
+    }
+
     // Pitch Keypad Buttons
     el.pitchKeyBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         selectedPitchLetter = btn.dataset.pitch;
+
+        // If a note is selected in the store, immediately update its pitch
+        const state = store.getState();
+        const selId = state.view.selectedNoteId;
+        if (selId) {
+          const activeScale = (state.theory && state.theory.activeScale) || 'none';
+          const rawPitch = `${selectedPitchLetter}${selectedOctave}`;
+          const midi = noteNameToMidi(rawPitch);
+          const pitchName = midiToScalePitchName(midi, activeScale);
+          store.updateNote(selId, {
+            pitchName,
+            midi
+          });
+          renderSimpleNotesRibbon();
+          renderAnnotationTrack();
+          if (state.view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
+        }
+
         updateSelectedPitchDisplay();
         store.eventBus.emit('audition:note', {
           noteName: `${selectedPitchLetter}${selectedOctave}`
@@ -4671,6 +4905,26 @@
     el.octaveKeyBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         selectedOctave = parseInt(btn.dataset.octave, 10);
+
+        // If a note is selected in the store, immediately update its octave
+        const state = store.getState();
+        const selId = state.view.selectedNoteId;
+        if (selId) {
+          const activeScale = (state.theory && state.theory.activeScale) || 'none';
+          const rawPitch = `${selectedPitchLetter}${selectedOctave}`;
+          const midi = noteNameToMidi(rawPitch);
+          const pitchName = midiToScalePitchName(midi, activeScale);
+          store.updateNote(selId, {
+            pitchName,
+            midi
+          });
+          renderSimpleNotesRibbon();
+          renderAnnotationTrack();
+          if (state.view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
+        }
+
         updateSelectedPitchDisplay();
         store.eventBus.emit('audition:note', {
           noteName: `${selectedPitchLetter}${selectedOctave}`
@@ -4682,6 +4936,23 @@
     el.durationKeyBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         selectedDuration = parseFloat(btn.dataset.duration);
+
+        // If a note is selected in the store, immediately update its duration
+        const state = store.getState();
+        const selId = state.view.selectedNoteId;
+        if (selId) {
+          const beatSec = 60 / state.tempo.bpm;
+          const noteDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
+          store.updateNote(selId, {
+            duration: noteDuration
+          });
+          renderSimpleNotesRibbon();
+          renderAnnotationTrack();
+          if (state.view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
+        }
+
         updateSelectedPitchDisplay();
       });
     });
@@ -4870,6 +5141,23 @@
         a.click();
         URL.revokeObjectURL(url);
         showToast(`Exported MusicXML: ${baseName}`, 'success');
+      });
+    }
+
+    // Rhythmic Letter Notes Exporter (Task 2.4.2)
+    if (el.btnExportLetterNotes) {
+      el.btnExportLetterNotes.addEventListener('click', () => {
+        const state = store.getState();
+        const text = exportLetterNotes(state);
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const baseName = (state.audio.fileName ? state.audio.fileName.replace(/\.[^/.]+$/, "") : 'wavescribe-transcription') + '-letter-notes.txt';
+        a.download = baseName;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Exported Letter Notes: ${baseName}`, 'success');
       });
     }
 
@@ -5163,12 +5451,12 @@
         e.preventDefault();
         const delta = e.shiftKey ? 5.0 : 1.0;
         seekAudio(store.getState().playback.currentTime + delta);
-      } else if (e.code === 'KeyN') {
+      } else if (e.code === 'KeyN' || e.code === 'Enter') {
         e.preventDefault();
         insertNoteAtCursor();
-      } else if (e.code === 'KeyR') {
+      } else if (e.code === 'KeyU') {
         e.preventDefault();
-        insertRestAtCursor();
+        updateSelectedNoteFromCurrent();
       } else if (e.code === 'KeyC' && !(e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         insertChordAtCursor();
@@ -5466,6 +5754,11 @@
       renderMixerStrips,
       encodeMidi,
       encodeMusicXml,
+      exportLetterNotes,
+      updateSelectedNoteFromCurrent,
+      MAJOR_SCALES,
+      getScaleDegree,
+      getDiatonicStep,
       saveAudioBlobToIndexedDb,
       loadAudioBlobFromIndexedDb,
       clearAudioBlobFromIndexedDb,

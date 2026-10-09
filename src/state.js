@@ -38,12 +38,12 @@ export function midiToNoteName(midi) {
  */
 export function noteNameToMidi(noteName) {
   if (!noteName || typeof noteName !== 'string') return 60;
-  const match = noteName.trim().match(/^([A-Ga-g])([#b]?)(-?\d+)$/);
+  const match = noteName.trim().match(/^([A-Ga-g])([#b]?)(-?\d+)?$/);
   if (!match) return 60;
 
   const letter = match[1].toUpperCase();
   const accidental = match[2];
-  const octave = parseInt(match[3], 10);
+  const octave = match[3] !== undefined ? parseInt(match[3], 10) : 4;
 
   let semitone = {
     C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11
@@ -88,20 +88,45 @@ export function formatTimestamp(seconds) {
 
 /**
  * Quantizes a time value in seconds to the nearest musical grid subdivision.
+ * Supports downbeat offset and swing groove factor.
  * @param {number} timeSeconds
  * @param {number} bpm
  * @param {string} snapDivision - 'off', '1/4', '1/8', '1/16', '1/8T'
+ * @param {number} [gridOffset=0]
+ * @param {number} [swingFactor=0.5] - 0.5 = straight, 0.58 = light, 0.66 = triplet/medium, 0.75 = hard
  * @returns {number} Quantized time in seconds
  */
-export function quantizeTime(timeSeconds, bpm, snapDivision, gridOffset = 0) {
+export function quantizeTime(timeSeconds, bpm, snapDivision, gridOffset = 0, swingFactor = 0.5) {
   if (snapDivision === 'off' || !snapDivision || bpm <= 0) {
     return timeSeconds;
   }
 
   const offset = Number(gridOffset) || 0;
   const relTime = timeSeconds - offset;
-
   const secondsPerBeat = 60 / bpm; // Quarter note duration
+  const swing = (typeof swingFactor === 'number' && swingFactor >= 0.5 && swingFactor <= 0.85) ? swingFactor : 0.5;
+
+  if (snapDivision === '1/8' && Math.abs(swing - 0.5) > 0.01) {
+    // 8th note swing quantization
+    const beatIndex = Math.floor(relTime / secondsPerBeat);
+    const posInBeat = relTime - (beatIndex * secondsPerBeat);
+    const offbeatPos = swing * secondsPerBeat;
+    
+    // Grid candidates: onbeat (0), offbeat (offbeatPos), next onbeat (secondsPerBeat)
+    const distToOnbeat = Math.abs(posInBeat - 0);
+    const distToOffbeat = Math.abs(posInBeat - offbeatPos);
+    const distToNextOnbeat = Math.abs(posInBeat - secondsPerBeat);
+
+    let chosenInBeat = 0;
+    if (distToOffbeat < distToOnbeat && distToOffbeat < distToNextOnbeat) {
+      chosenInBeat = offbeatPos;
+    } else if (distToNextOnbeat < distToOnbeat) {
+      chosenInBeat = secondsPerBeat;
+    }
+    const snappedRel = (beatIndex * secondsPerBeat) + chosenInBeat;
+    return Math.max(0, Math.round((snappedRel + offset) * 10000) / 10000);
+  }
+
   let gridStepSeconds = secondsPerBeat;
 
   switch (snapDivision) {
@@ -123,6 +148,210 @@ export function quantizeTime(timeSeconds, bpm, snapDivision, gridOffset = 0) {
 
   const snappedRel = Math.round(relTime / gridStepSeconds) * gridStepSeconds;
   return Math.max(0, Math.round((snappedRel + offset) * 10000) / 10000);
+}
+
+// --- Music Theory & Scale Engine (Task 2.2) ---
+
+export const MAJOR_SCALES = {
+  'none': { key: 'none', name: 'Chromatic / None', root: null, pitchClasses: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], spelling: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] },
+  'C':    { key: 'C',    name: 'C Major',   root: 'C',  pitchClasses: [0, 2, 4, 5, 7, 9, 11], spelling: ['C', 'D', 'E', 'F', 'G', 'A', 'B'] },
+  'G':    { key: 'G',    name: 'G Major',   root: 'G',  pitchClasses: [7, 9, 11, 0, 2, 4, 6], spelling: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'] },
+  'D':    { key: 'D',    name: 'D Major',   root: 'D',  pitchClasses: [2, 4, 6, 7, 9, 11, 1], spelling: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'] },
+  'A':    { key: 'A',    name: 'A Major',   root: 'A',  pitchClasses: [9, 11, 1, 2, 4, 6, 8], spelling: ['A', 'B', 'C#', 'D', 'E', 'F#', 'G#'] },
+  'E':    { key: 'E',    name: 'E Major',   root: 'E',  pitchClasses: [4, 6, 8, 9, 11, 1, 3], spelling: ['E', 'F#', 'G#', 'A', 'B', 'C#', 'D#'] },
+  'B':    { key: 'B',    name: 'B Major',   root: 'B',  pitchClasses: [11, 1, 3, 4, 6, 8, 10], spelling: ['B', 'C#', 'D#', 'E', 'F#', 'G#', 'A#'] },
+  'F':    { key: 'F',    name: 'F Major',   root: 'F',  pitchClasses: [5, 7, 9, 10, 0, 2, 4], spelling: ['F', 'G', 'A', 'Bb', 'C', 'D', 'E'] },
+  'Bb':   { key: 'Bb',   name: 'Bb Major',  root: 'Bb', pitchClasses: [10, 0, 2, 3, 5, 7, 9], spelling: ['Bb', 'C', 'D', 'Eb', 'F', 'G', 'A'] },
+  'Eb':   { key: 'Eb',   name: 'Eb Major',  root: 'Eb', pitchClasses: [3, 5, 7, 8, 10, 0, 2], spelling: ['Eb', 'F', 'G', 'Ab', 'Bb', 'C', 'D'] },
+  'Ab':   { key: 'Ab',   name: 'Ab Major',  root: 'Ab', pitchClasses: [8, 10, 0, 1, 3, 5, 7], spelling: ['Ab', 'Bb', 'C', 'Db', 'Eb', 'F', 'G'] },
+  'Db':   { key: 'Db',   name: 'Db Major',  root: 'Db', pitchClasses: [1, 3, 5, 6, 8, 10, 0], spelling: ['Db', 'Eb', 'F', 'Gb', 'Ab', 'Bb', 'C'] },
+  'Gb':   { key: 'Gb',   name: 'Gb Major',  root: 'Gb', pitchClasses: [6, 8, 10, 11, 1, 3, 5], spelling: ['Gb', 'Ab', 'Bb', 'Cb', 'Db', 'Eb', 'F'] }
+};
+
+/**
+ * Returns scale degree analysis for a pitch name or MIDI number.
+ * @param {string|number} pitchOrMidi
+ * @param {string} [activeScale='none']
+ * @returns {{ inScale: boolean, degree: number|null, isRoot: boolean, isAccidental: boolean, spelling?: string }}
+ */
+export function getScaleDegree(pitchOrMidi, activeScale = 'none') {
+  if (!activeScale || activeScale === 'none' || !MAJOR_SCALES[activeScale]) {
+    return { inScale: true, degree: null, isRoot: false, isAccidental: false };
+  }
+  const scale = MAJOR_SCALES[activeScale];
+  const midi = typeof pitchOrMidi === 'number' ? pitchOrMidi : noteNameToMidi(pitchOrMidi);
+  const pc = ((midi % 12) + 12) % 12;
+  const idx = scale.pitchClasses.indexOf(pc);
+  if (idx === -1) {
+    return { inScale: false, degree: 0, isRoot: false, isAccidental: true };
+  }
+  return {
+    inScale: true,
+    degree: idx + 1,
+    isRoot: idx === 0,
+    isAccidental: false,
+    spelling: scale.spelling[idx]
+  };
+}
+
+/**
+ * Checks whether a given note pitch belongs to the active scale.
+ * @param {string|number} pitchOrMidi
+ * @param {string} [activeScale='none']
+ * @returns {boolean}
+ */
+export function isNoteInScale(pitchOrMidi, activeScale = 'none') {
+  if (!activeScale || activeScale === 'none') return true;
+  return getScaleDegree(pitchOrMidi, activeScale).inScale;
+}
+
+/**
+ * Steps to the next diatonic note in the active scale (or semitone if Chromatic/None).
+ * @param {number} currentMidi
+ * @param {number} direction - +1 for up, -1 for down
+ * @param {string} [activeScale='none']
+ * @returns {number} New MIDI number clamped between 21 and 108
+ */
+export function getDiatonicStep(currentMidi, direction, activeScale = 'none') {
+  const dir = direction > 0 ? 1 : -1;
+  if (!activeScale || activeScale === 'none' || !MAJOR_SCALES[activeScale]) {
+    return Math.max(21, Math.min(108, currentMidi + dir));
+  }
+  const scale = MAJOR_SCALES[activeScale];
+  for (let offset = 1; offset <= 12; offset++) {
+    const candidate = currentMidi + (dir * offset);
+    if (candidate < 21 || candidate > 108) {
+      return Math.max(21, Math.min(108, candidate));
+    }
+    const pc = ((candidate % 12) + 12) % 12;
+    if (scale.pitchClasses.includes(pc)) {
+      return candidate;
+    }
+  }
+  return Math.max(21, Math.min(108, currentMidi + dir));
+}
+
+/**
+ * Returns the proper enharmonic pitch name for a MIDI number in the active scale.
+ * @param {number} midi
+ * @param {string} [activeScale='none']
+ * @returns {string} e.g. "Bb4" instead of "A#4" in F Major
+ */
+export function midiToScalePitchName(midi, activeScale = 'none') {
+  if (!activeScale || activeScale === 'none' || !MAJOR_SCALES[activeScale]) {
+    return midiToNoteName(midi);
+  }
+  const scale = MAJOR_SCALES[activeScale];
+  const pc = ((midi % 12) + 12) % 12;
+  const idx = scale.pitchClasses.indexOf(pc);
+  const octave = Math.floor(midi / 12) - 1;
+  if (idx !== -1) {
+    const letter = scale.spelling[idx];
+    return `${letter}${octave}`;
+  }
+  return midiToNoteName(midi);
+}
+
+/**
+ * Serializes project notes into rhythmic dash-grid letter notation text (Task 2.4).
+ * Each 4/4 measure is divided into 8 eighth-note slots:
+ * - 4 quarter notes C in bar 1: "C - C - C - C - | "
+ * - 2 half notes D in bar 2: "D - - - D - - - | "
+ * - 8th notes: "C C "
+ * - 16th notes: "CCCC"
+ * 
+ * @param {object} state - WaveScribe store state object
+ * @returns {string} Formatted plain text
+ */
+export function exportLetterNotes(state) {
+  const bpm = state.tempo?.bpm || 120;
+  const timeSig = state.tempo?.timeSignature || [4, 4];
+  const gridOffset = Number(state.tempo?.gridOffset) || 0;
+  const activeScale = state.theory?.activeScale || 'none';
+  const scaleName = (MAJOR_SCALES[activeScale] && MAJOR_SCALES[activeScale].name) || 'Chromatic';
+  const songTitle = state.audio?.fileName ? state.audio.fileName.replace(/\.[^/.]+$/, "") : 'WaveScribe Transcription';
+
+  const beatSec = 60 / bpm;
+  const beatsPerBar = timeSig[0] || 4;
+  const barSec = beatsPerBar * beatSec;
+  const eighthSec = beatSec / 2;
+  const slotsPerBar = 8; // 8 eighth-note subdivision slots per bar in 4/4
+
+  // Get notes for active track (or melody track, or all notes)
+  const trackId = state.view?.activeTrackId;
+  let notes = (state.notes || []).filter(n => !n.isRest && n.pitchName !== 'REST');
+  if (trackId) {
+    const trackNotes = notes.filter(n => n.trackId === trackId);
+    if (trackNotes.length > 0) {
+      notes = trackNotes;
+    }
+  }
+  notes.sort((a, b) => a.startTime - b.startTime);
+
+  // Determine total bars
+  const lastNoteEnd = notes.length > 0 ? Math.max(...notes.map(n => n.startTime + n.duration)) : 0;
+  const audioDuration = Math.max(state.audio?.duration || 0, lastNoteEnd);
+  const totalBars = Math.max(1, Math.ceil(Math.max(0, audioDuration - gridOffset) / barSec));
+
+  const barsOutput = [];
+
+  for (let b = 0; b < totalBars; b++) {
+    const barStart = gridOffset + (b * barSec);
+    const slots = new Array(slotsPerBar).fill('-');
+
+    for (let s = 0; s < slotsPerBar; s++) {
+      const slotStart = barStart + (s * eighthSec);
+      const slotEnd = slotStart + eighthSec;
+
+      // Find notes starting in this eighth-note slot
+      const startingNotes = notes.filter(n => n.startTime >= (slotStart - 0.02) && n.startTime < (slotEnd - 0.02));
+
+      if (startingNotes.length > 0) {
+        if (startingNotes.length === 1) {
+          const note = startingNotes[0];
+          // Strip octave digits for pure letter note notation (e.g. "C4" -> "C", "F#3" -> "F#")
+          const letter = (note.pitchName || 'C').replace(/-?\d+$/, '');
+          slots[s] = letter;
+
+          // If note sustains into following eighth slots, fill subsequent slots with '-'
+          const sustainSlots = Math.round(note.duration / eighthSec);
+          for (let fill = 1; fill < sustainSlots && (s + fill) < slotsPerBar; fill++) {
+            slots[s + fill] = '-';
+          }
+        } else {
+          // Multiple notes in this eighth slot (e.g. 16th notes): combine their letters e.g. "CC"
+          const letters = startingNotes.map(n => (n.pitchName || 'C').replace(/-?\d+$/, '')).join('');
+          slots[s] = letters;
+        }
+      } else {
+        // Check if a note from earlier continues sustaining into this slot
+        const sustaining = notes.find(n => n.startTime < (slotStart - 0.02) && (n.startTime + n.duration) >= (slotEnd - 0.02));
+        if (sustaining && slots[s] === '-') {
+          slots[s] = '-';
+        }
+      }
+    }
+
+    barsOutput.push(slots.join(' '));
+  }
+
+  // Format into grouped measures (4 measures per line)
+  let text = `================================================================================\n`;
+  text += `Title: ${songTitle}\n`;
+  text += `Tempo: ${bpm} BPM | Time Signature: ${timeSig[0]}/${timeSig[1]} | Key: ${scaleName}\n`;
+  text += `Grid: 8 dashes per bar (1 dash = 1/8 note | e.g. Quarter = C - | Half = D - - - )\n`;
+  text += `================================================================================\n\n`;
+
+  const measuresPerLine = 4;
+  for (let i = 0; i < barsOutput.length; i += measuresPerLine) {
+    const chunk = barsOutput.slice(i, i + measuresPerLine);
+    const startM = i + 1;
+    const endM = Math.min(i + measuresPerLine, barsOutput.length);
+    const lineLabel = `M${String(startM).padStart(2, '0')}-${String(endM).padStart(2, '0')}: `;
+    text += `${lineLabel}${chunk.join(' | ')} |\n`;
+  }
+
+  return text;
 }
 
 // --- Event Bus ---
@@ -187,7 +416,11 @@ export const INITIAL_STATE = {
     bpm: 120,
     timeSignature: [4, 4],
     snap: '1/16', // 'off' | '1/4' | '1/8' | '1/16' | '1/8T'
-    gridOffset: 0 // offset in seconds for Downbeat 1.1
+    gridOffset: 0, // offset in seconds for Downbeat 1.1
+    swingFactor: 0.5 // 0.5 = Straight (50%), 0.58 = Light (58%), 0.66 = Triplet (66%), 0.75 = Hard (75%)
+  },
+  theory: {
+    activeScale: 'none' // 'none' | 'C' | 'G' | 'D' | 'A' | 'E' | 'B' | 'F' | 'Bb' | 'Eb' | 'Ab' | 'Db' | 'Gb'
   },
   view: {
     zoom: 1.0, // Multiplier (1.0 = fit or default)
@@ -246,6 +479,7 @@ export class Store {
       tracks: JSON.parse(JSON.stringify(this.state.tracks)),
       notes: JSON.parse(JSON.stringify(this.state.notes)),
       tempo: JSON.parse(JSON.stringify(this.state.tempo)),
+      theory: JSON.parse(JSON.stringify(this.state.theory || { activeScale: 'none' })),
       loop: JSON.parse(JSON.stringify(this.state.playback.loop))
     };
     this.history.past.push(snapshot);
@@ -270,6 +504,7 @@ export class Store {
       tracks: JSON.parse(JSON.stringify(this.state.tracks)),
       notes: JSON.parse(JSON.stringify(this.state.notes)),
       tempo: JSON.parse(JSON.stringify(this.state.tempo)),
+      theory: JSON.parse(JSON.stringify(this.state.theory || { activeScale: 'none' })),
       loop: JSON.parse(JSON.stringify(this.state.playback.loop))
     };
     this.history.future.push(currentState);
@@ -278,6 +513,7 @@ export class Store {
     this.state.tracks = previousState.tracks;
     this.state.notes = previousState.notes;
     this.state.tempo = previousState.tempo;
+    if (previousState.theory) this.state.theory = previousState.theory;
     this.state.playback.loop = previousState.loop;
 
     this.notify('undo', { actionName: previousState.actionName });
@@ -292,6 +528,7 @@ export class Store {
       tracks: JSON.parse(JSON.stringify(this.state.tracks)),
       notes: JSON.parse(JSON.stringify(this.state.notes)),
       tempo: JSON.parse(JSON.stringify(this.state.tempo)),
+      theory: JSON.parse(JSON.stringify(this.state.theory || { activeScale: 'none' })),
       loop: JSON.parse(JSON.stringify(this.state.playback.loop))
     };
     this.history.past.push(currentState);
@@ -300,6 +537,7 @@ export class Store {
     this.state.tracks = nextState.tracks;
     this.state.notes = nextState.notes;
     this.state.tempo = nextState.tempo;
+    if (nextState.theory) this.state.theory = nextState.theory;
     this.state.playback.loop = nextState.loop;
 
     this.notify('redo', { actionName: nextState.actionName });
@@ -323,6 +561,17 @@ export class Store {
     }
     this.notify('audio:loaded', this.state.audio);
     this.eventBus.emit('audio:loaded', this.state.audio);
+  }
+
+  setAudioBuffer(buffer, fileName = 'audio.wav') {
+    if (buffer) {
+      this.setAudioLoaded({
+        fileName: fileName,
+        duration: buffer.duration || 0,
+        sampleRate: buffer.sampleRate || 44100,
+        channels: buffer.numberOfChannels || 2
+      });
+    }
   }
 
   // --- Playback Actions ---
@@ -446,6 +695,23 @@ export class Store {
     this.state.tempo.gridOffset = clamped;
     this.notify('tempo:gridOffset', clamped);
     this.eventBus.emit('tempo:gridOffset', clamped);
+  }
+
+  setSwingFactor(factor) {
+    const parsed = Math.max(0.5, Math.min(0.85, Number(factor) || 0.5));
+    this.snapshotForHistory('Change Swing Groove');
+    this.state.tempo.swingFactor = parsed;
+    this.notify('tempo:swing', parsed);
+    this.eventBus.emit('tempo:swing', parsed);
+  }
+
+  setActiveScale(scale) {
+    const validScale = MAJOR_SCALES[scale] ? scale : 'none';
+    this.snapshotForHistory('Change Active Scale');
+    if (!this.state.theory) this.state.theory = {};
+    this.state.theory.activeScale = validScale;
+    this.notify('theory:scale', validScale);
+    this.eventBus.emit('theory:scale', validScale);
   }
 
   // --- View & Navigation Actions ---
@@ -713,6 +979,7 @@ export class Store {
         loop: this.state.playback.loop
       },
       tempo: this.state.tempo,
+      theory: this.state.theory || { activeScale: 'none' },
       tracks: this.state.tracks,
       notes: this.state.notes
     }, null, 2);
@@ -724,6 +991,7 @@ export class Store {
       this.snapshotForHistory('Import Session');
 
       if (data.tempo) this.state.tempo = { ...this.state.tempo, ...data.tempo };
+      if (data.theory) this.state.theory = { ...this.state.theory, ...data.theory };
       if (data.tracks && Array.isArray(data.tracks)) this.state.tracks = data.tracks;
       if (data.notes && Array.isArray(data.notes)) this.state.notes = data.notes;
       if (data.playback && data.playback.loop) this.state.playback.loop = data.playback.loop;

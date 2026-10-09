@@ -1,2 +1,34 @@
+# Testing & Temporary Browser Profiles
+scratch/
 test/assets/*
 !test/assets/.gitkeep
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.nyc_output/
+coverage/
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment & Local Configuration
+.env
+.env.local
+.env.*.local
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~

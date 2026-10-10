@@ -31,3 +31,13 @@ This document tracks upcoming features and competitive enhancements for **WaveSc
   * Real-time VexFlow stave and notation rendering for transcribed measures.
 * **Semitone Pitch Transposition ($\pm 12$ Semitones):**
   * Transpose reference audio pitch for down-tuned instruments without altering playback speed.
+
+### 4. Chord Marker & Arpeggio Generation Engine (TODO)
+* **Chord Marker Re-Introduction:**
+  * Re-integrate the Piano Roll Chord Marker tool with advanced harmony detection and lead-sheet chord symbol recognition (e.g., `Cmaj7`, `Dm9`, `G13b9`).
+* **Interactive Arpeggiator:**
+  * Transform placed chords into customizable polyphonic arpeggios:
+    * Selectable pattern directions: Ascending (Up), Descending (Down), Convergent (Up-Down), Alternating, and Random.
+    * Subdivision rates: $1/8$, $1/8\text{T}$, $1/16$, $1/16\text{T}$, $1/32$.
+    * Velocity accent curves: First beat downbeat emphasis, groove swing dynamics.
+

@@ -1092,6 +1092,7 @@ export class Store {
         channels: this.state.audio.channels
       },
       playback: {
+        currentTime: this.state.playback.currentTime,
         playbackRate: this.state.playback.playbackRate,
         detuneCents: this.state.playback.detuneCents,
         loop: this.state.playback.loop
@@ -1099,7 +1100,11 @@ export class Store {
       tempo: this.state.tempo,
       theory: this.state.theory || { activeScale: 'none' },
       tracks: this.state.tracks,
-      notes: this.state.notes
+      notes: this.state.notes,
+      view: {
+        zoom: this.state.view.zoom,
+        editorMode: this.state.view.editorMode
+      }
     }, null, 2);
   }
 
@@ -1113,6 +1118,15 @@ export class Store {
       if (data.tracks && Array.isArray(data.tracks)) this.state.tracks = data.tracks;
       if (data.notes && Array.isArray(data.notes)) this.state.notes = data.notes;
       if (data.playback && data.playback.loop) this.state.playback.loop = data.playback.loop;
+      if (data.playback && typeof data.playback.currentTime === 'number') {
+        this.state.playback.currentTime = data.playback.currentTime;
+      }
+      if (data.view && typeof data.view.zoom === 'number') {
+        this.setZoom(data.view.zoom);
+      }
+      if (data.view && data.view.editorMode) {
+        this.setEditorMode(data.view.editorMode);
+      }
 
       this.notify('session:imported', data);
       this.eventBus.emit('session:imported', data);

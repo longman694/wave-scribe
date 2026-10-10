@@ -173,7 +173,7 @@ async function run() {
 
       // Position playhead at 1.23s (should snap to nearest 0.5s = 1.0s)
       store.setCurrentTime(1.23);
-      document.getElementById('btn-add-note-at-cursor').click();
+      (document.getElementById('btn-add-note-at-cursor') || document.getElementById('btn-simple-insert-note')).click();
 
       const note = store.getState().notes[store.getState().notes.length - 1];
       return {

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Store, quantizeTime, noteNameToMidi, midiToNoteName, calculateHomePosition, calculateHomeViewportScroll } from '../src/state.js';
+import { saveSessionToLocalStorage, loadSessionFromLocalStorage } from '../src/storage.js';
 
 test('UX Improvements & Piano Roll State Logic', async (t) => {
   await t.test('quantizeTime respects swingFactor and gridOffset consistently', () => {
@@ -225,6 +226,41 @@ test('UX Improvements & Piano Roll State Logic', async (t) => {
     assert.equal(store.getState().notes.length, 2);
     assert.equal(store.getState().notes[0].pitchName, 'C4');
     assert.equal(store.getState().notes[1].pitchName, 'D4');
+  });
+
+  await t.test('saveSessionToLocalStorage and loadSessionFromLocalStorage persist zoom, cursor, and view positions', () => {
+    const storageMap = new Map();
+    globalThis.localStorage = {
+      getItem: (key) => storageMap.get(key) || null,
+      setItem: (key, val) => storageMap.set(key, String(val)),
+      removeItem: (key) => storageMap.delete(key),
+      clear: () => storageMap.clear()
+    };
+
+    const store = new Store();
+    store.setCurrentTime(8.75);
+    store.setZoom(4.0);
+    store.setEditorMode('piano-roll');
+
+    const viewExtra = {
+      currentTime: 8.75,
+      zoom: 4.0,
+      scrollLeft: 640,
+      pianoRollScrollTop: 920,
+      editorMode: 'piano-roll'
+    };
+
+    saveSessionToLocalStorage(store.getState(), viewExtra);
+
+    const loaded = loadSessionFromLocalStorage();
+    assert.ok(loaded);
+    assert.equal(loaded.playback.currentTime, 8.75);
+    assert.equal(loaded.view.zoom, 4.0);
+    assert.equal(loaded.view.editorMode, 'piano-roll');
+    assert.equal(loaded.view.scrollLeft, 640);
+    assert.equal(loaded.view.pianoRollScrollTop, 920);
+
+    delete globalThis.localStorage;
   });
 });
 

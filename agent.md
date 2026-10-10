@@ -24,9 +24,10 @@
    - Notes are represented with explicit start times in seconds, duration in seconds, MIDI numbers ($21\dots 108$), note names, velocity, and track ID.
    - Tempo state is stored in `state.tempo` with `bpm`, `timeSignature`, `gridSnap`, `swingFactor`, and `gridOffset`.
 
-4. **Resilient Local Persistence:**
-   - **Audio Blobs:** Stored in **IndexedDB** (`MusicTranscriberDB`, store `audioFiles`).
-   - **Session State:** Stored in **LocalStorage** (`wavescribe_session_state`) with debounced auto-save.
+4. **Resilient Local Persistence & Reopen State:**
+   - **Audio Blobs:** Stored in **IndexedDB** (`MusicTranscriberDB`, store `audio_files`).
+   - **Session State & Preferences:** Stored in **LocalStorage** (`wavescribe_session` and `wavescribe_preferences`).
+   - **Exact Restore Across Reopen:** Automatically preserves and restores exact timeline zoom factor (`state.view.zoom`), playhead cursor position (`state.playback.currentTime`), horizontal viewport scroll (`scrollLeft`), and vertical pitch scroll (`pianoRollScrollTop`). Protected by `isRestoringSession` to eliminate state overwrites during initial boot.
 
 5. **Aesthetics & Ergonomics:**
    - Dark theme based on slate/zinc palette (`#09090b` background, `#18181b` card surfaces, `#27272a` borders).
@@ -159,6 +160,11 @@ Seeking via Home must guarantee that the playhead cursor is visible in the view 
 4. **Hover Preview & Audio Invariance:**
    - Hovering over the Piano Roll grid shows a visual ghost note block with duration badge and highlights the corresponding key in the piano gutter.
    - **No Audio on Hover:** Pitch preview audio on hover is intentionally disabled to avoid auditory clutter while moving across the grid. Pitch audition occurs on explicit key click, note placement, or keyboard audition.
+
+5. **Streamlined Piano Roll Toolbar:**
+   - Focus on direct canvas interactions: **Draw** and **Erase** tools are prominent.
+   - Redundant "Insert Note" and "Update" buttons have been removed from the toolbar (direct grid drawing, duration wheel adjustments, and hotkey `N` provide faster workflow).
+   - "Chord Marker" is hidden (`display: none`) in preparation for future harmonic analysis and interactive polyphonic arpeggiator feature upgrades.
 
 ---
 

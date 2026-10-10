@@ -1885,10 +1885,8 @@
           <span class="badge badge-emerald" id="badge-active-track">Melody Track</span>
         </div>
         <div class="transport-group">
-          <button class="btn btn-sm btn-primary" id="btn-add-note-at-cursor" title="Insert Note at Playhead (N)">+ Insert Note (N)</button>
-          <button class="btn btn-sm" id="btn-update-selected-piano-roll" title="Update Selected Note (U)">✎ Update (U)</button>
-          <button class="btn btn-sm" id="btn-add-chord-at-cursor" title="Insert Chord Marker (C)">+ Chord Marker (C)</button>
-          <div class="transport-divider"></div>
+          <!-- TODO: Chord marker hidden for future Arpeggio / Harmonic analysis feature upgrade -->
+          <button class="btn btn-sm" id="btn-add-chord-at-cursor" title="Insert Chord Marker (C)" style="display: none;">+ Chord Marker (C)</button>
           <button class="btn btn-sm btn-active" id="btn-tool-draw">Draw</button>
           <button class="btn btn-sm" id="btn-tool-erase">Erase</button>
         </div>
@@ -3978,6 +3976,38 @@
 
     // Audio Seeking & Transport helper (Task 1.2.2 Smart Playback Resume Anchor)
     let lastPlaybackAnchorTime = 0;
+    let isRestoringSession = true;
+
+    // Save Zoom, Cursor, and Position before close or state change
+    function saveCurrentStateAndPosition() {
+      if (isRestoringSession) return;
+      try {
+        const state = store.getState();
+        const curTime = (audioElement && !isNaN(audioElement.currentTime) && audioElement.currentTime > 0)
+          ? audioElement.currentTime
+          : (state.playback ? state.playback.currentTime : 0);
+        const curZoom = (state.view && typeof state.view.zoom === 'number') ? state.view.zoom : 1.0;
+        const curScrollLeft = el.waveformViewport ? el.waveformViewport.scrollLeft : 0;
+        const curPianoRollScrollTop = el.pianoRollGridContainer ? el.pianoRollGridContainer.scrollTop : 0;
+        const curEditorMode = (state.view && state.view.editorMode) ? state.view.editorMode : 'simple';
+
+        const viewExtra = {
+          currentTime: curTime,
+          zoom: curZoom,
+          scrollLeft: curScrollLeft,
+          pianoRollScrollTop: curPianoRollScrollTop,
+          editorMode: curEditorMode
+        };
+
+        saveSessionToLocalStorage(state, viewExtra);
+        savePreferencesToLocalStorage(viewExtra);
+      } catch (err) {
+        console.warn('Failed to save state and position:', err);
+      }
+    }
+
+    window.addEventListener('beforeunload', saveCurrentStateAndPosition);
+    window.addEventListener('pagehide', saveCurrentStateAndPosition);
 
     function seekAudio(seconds, updateAnchor = true) {
       const duration = store.getState().audio.duration || 30;
@@ -3987,10 +4017,21 @@
       if (updateAnchor) {
         lastPlaybackAnchorTime = clamped;
       }
-      if (audioElement && !isNaN(audioElement.duration)) {
-        audioElement.currentTime = clamped;
+      if (audioElement) {
+        if (!isNaN(audioElement.duration) && audioElement.duration > 0) {
+          audioElement.currentTime = clamped;
+        } else {
+          const applySeekOnMeta = () => {
+            try {
+              audioElement.currentTime = clamped;
+            } catch (e) {}
+            audioElement.removeEventListener('loadedmetadata', applySeekOnMeta);
+          };
+          audioElement.addEventListener('loadedmetadata', applySeekOnMeta, { once: true });
+        }
       }
       renderWaveform();
+      saveCurrentStateAndPosition();
     }
 
     function togglePlayback() {
@@ -4005,6 +4046,7 @@
         }
       } else {
         lastPlaybackAnchorTime = store.getState().playback.currentTime;
+        saveCurrentStateAndPosition();
       }
       store.setIsPlaying(willPlay);
     }
@@ -4234,6 +4276,9 @@
       renderAnnotationTrack();
       if (store.getState().view.editorMode !== 'simple') {
         renderPianoRollGrid();
+      }
+      if (typeof saveCurrentStateAndPosition === 'function') {
+        saveCurrentStateAndPosition();
       }
     }
 
@@ -5280,7 +5325,7 @@
         renderPianoRollGrid();
       }
     }
-    el.btnAddNoteAtCursor.addEventListener('click', insertNoteAtCursor);
+    if (el.btnAddNoteAtCursor) el.btnAddNoteAtCursor.addEventListener('click', insertNoteAtCursor);
 
     // Update Selected Note from Active Pitch & Duration (Task 2.1.2)
     function updateSelectedNoteFromCurrent() {
@@ -5347,7 +5392,7 @@
         }
       }
     }
-    el.btnAddChordAtCursor.addEventListener('click', insertChordAtCursor);
+    if (el.btnAddChordAtCursor) el.btnAddChordAtCursor.addEventListener('click', insertChordAtCursor);
 
     // Mode Switcher Controls
     if (el.btnModeSimple) {
@@ -6378,7 +6423,7 @@
     // Reactive Store Subscriber & Auto-Save (Task 9.4)
     store.subscribe(() => {
       syncUiFromState();
-      saveSessionToLocalStorage(store.getState());
+      saveCurrentStateAndPosition();
     });
 
     // Initialize View
@@ -6398,9 +6443,27 @@
 
     // Auto-Restore Session from LocalStorage & IndexedDB (Task 9.4)
     async function initSessionRestore() {
+      isRestoringSession = true;
       try {
         const savedSession = loadSessionFromLocalStorage();
-        if (savedSession && savedSession.notes && savedSession.notes.length > 0) {
+        const savedPrefs = loadPreferencesFromLocalStorage();
+
+        let targetZoom = 1.0;
+        let targetCurrentTime = 0;
+        let targetScrollLeft = null;
+        let targetPianoRollScrollTop = null;
+        let targetEditorMode = null;
+
+        if (savedSession) {
+          if (savedSession.view) {
+            if (typeof savedSession.view.zoom === 'number') targetZoom = savedSession.view.zoom;
+            if (typeof savedSession.view.scrollLeft === 'number') targetScrollLeft = savedSession.view.scrollLeft;
+            if (typeof savedSession.view.pianoRollScrollTop === 'number') targetPianoRollScrollTop = savedSession.view.pianoRollScrollTop;
+            if (savedSession.view.editorMode) targetEditorMode = savedSession.view.editorMode;
+          }
+          if (savedSession.playback && typeof savedSession.playback.currentTime === 'number') {
+            targetCurrentTime = savedSession.playback.currentTime;
+          }
           store.importSessionJSON(JSON.stringify(savedSession));
           renderMixerStrips();
           renderSimpleNotesRibbon();
@@ -6410,14 +6473,60 @@
           }
         }
 
+        if (savedPrefs) {
+          if (typeof savedPrefs.zoom === 'number') targetZoom = savedPrefs.zoom;
+          if (typeof savedPrefs.currentTime === 'number') targetCurrentTime = savedPrefs.currentTime;
+          if (typeof savedPrefs.scrollLeft === 'number') targetScrollLeft = savedPrefs.scrollLeft;
+          if (typeof savedPrefs.pianoRollScrollTop === 'number') targetPianoRollScrollTop = savedPrefs.pianoRollScrollTop;
+          if (savedPrefs.editorMode) targetEditorMode = savedPrefs.editorMode;
+        }
+
+        // 1. Restore editor mode if specified
+        if (targetEditorMode) {
+          store.setEditorMode(targetEditorMode);
+        }
+
+        // 2. Restore zoom level
+        if (typeof targetZoom === 'number' && targetZoom >= 0.5) {
+          updateZoomView(targetZoom);
+        }
+
+        // 3. Restore audio blob from IndexedDB if available
         const savedAudio = await loadAudioBlobFromIndexedDb();
         if (savedAudio && savedAudio.blob) {
           const file = new File([savedAudio.blob], savedAudio.fileName || 'restored-audio.wav', { type: savedAudio.blob.type || 'audio/wav' });
           await handleAudioFileSelected(file);
           showToast(`Restored previous session (${store.getState().notes.length} notes)`, 'success');
         }
+
+        // 4. Re-apply target zoom and cursor position after audio ingestion
+        if (typeof targetZoom === 'number' && targetZoom >= 0.5) {
+          updateZoomView(targetZoom);
+        }
+
+        if (typeof targetCurrentTime === 'number' && targetCurrentTime >= 0) {
+          seekAudio(targetCurrentTime, true);
+        }
+
+        // 5. Restore viewport scroll positions
+        requestAnimationFrame(() => {
+          if (typeof targetScrollLeft === 'number' && targetScrollLeft >= 0) {
+            if (el.waveformViewport) el.waveformViewport.scrollLeft = targetScrollLeft;
+            if (el.annotationViewport) el.annotationViewport.scrollLeft = targetScrollLeft;
+            if (el.pianoRollGridContainer) el.pianoRollGridContainer.scrollLeft = targetScrollLeft;
+          } else if (targetCurrentTime > 0) {
+            scrollPlayheadIntoView(targetCurrentTime);
+          }
+
+          if (typeof targetPianoRollScrollTop === 'number' && targetPianoRollScrollTop >= 0) {
+            if (el.pianoRollGridContainer) el.pianoRollGridContainer.scrollTop = targetPianoRollScrollTop;
+            if (el.pianoKeysGutter) el.pianoKeysGutter.scrollTop = targetPianoRollScrollTop;
+          }
+        });
       } catch (err) {
         console.warn('Session auto-restore error:', err);
+      } finally {
+        isRestoringSession = false;
       }
     }
     initSessionRestore();
@@ -6430,6 +6539,10 @@
       updateZoomView,
       seekAudio,
       togglePlayback,
+      saveCurrentStateAndPosition,
+      initSessionRestore,
+      setRestoringSession: (v) => { isRestoringSession = v; },
+      isRestoringSession: () => isRestoringSession,
       getPlaybackAnchorTime: () => lastPlaybackAnchorTime,
       setPlaybackAnchorTime: (t) => { lastPlaybackAnchorTime = t; },
       getDragStates: () => ({

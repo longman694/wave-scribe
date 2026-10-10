@@ -91,10 +91,10 @@ async function run() {
       document.getElementById('waveform-viewport').scrollLeft = 2500;
     `);
 
-    let stateA = await evaluate(`({
+    let stateA = await evaluate(`(() => ({
       time: window.__WAVESCRIBE_STORE__.getState().playback.currentTime,
       scrollLeft: document.getElementById('waveform-viewport').scrollLeft
-    })`);
+    }))()`);
     console.log('Before Home click:', stateA);
     assert.equal(stateA.time, 30.0);
     assert.equal(stateA.scrollLeft, 2500);
@@ -103,12 +103,12 @@ async function run() {
     await evaluate(`document.getElementById('btn-stop-rewind').click();`);
     await wait(100);
 
-    stateA = await evaluate(`({
+    stateA = await evaluate(`(() => ({
       time: window.__WAVESCRIBE_STORE__.getState().playback.currentTime,
       scrollLeft: document.getElementById('waveform-viewport').scrollLeft,
       trackW: document.getElementById('waveform-track').clientWidth,
       viewW: document.getElementById('waveform-viewport').clientWidth
-    })`);
+    }))()`);
     console.log('After Home click (beat start):', stateA);
     assert.equal(stateA.time, 2.0, 'Cursor must seek to beat start line (2.0s)');
     
@@ -132,12 +132,12 @@ async function run() {
     `);
     await wait(100);
 
-    const stateB = await evaluate(`({
+    const stateB = await evaluate(`(() => ({
       time: window.__WAVESCRIBE_STORE__.getState().playback.currentTime,
       scrollLeft: document.getElementById('waveform-viewport').scrollLeft,
       trackW: document.getElementById('waveform-track').clientWidth,
       viewW: document.getElementById('waveform-viewport').clientWidth
-    })`);
+    }))()`);
     console.log('After Home key (Line A):', stateB);
     assert.equal(stateB.time, 5.0, 'Cursor must seek to Line A (5.0s)');
     
@@ -156,12 +156,12 @@ async function run() {
     `);
     await wait(100);
 
-    const stateC = await evaluate(`({
+    const stateC = await evaluate(`(() => ({
       time: window.__WAVESCRIBE_STORE__.getState().playback.currentTime,
       scrollLeft: document.getElementById('waveform-viewport').scrollLeft,
       trackW: document.getElementById('waveform-track').clientWidth,
       viewW: document.getElementById('waveform-viewport').clientWidth
-    })`);
+    }))()`);
     console.log('After Home click with loop disabled:', stateC);
     assert.equal(stateC.time, 2.0, 'Cursor must seek to beat start line (2.0s) when loop is disabled');
     const playheadPxC = (2.0 / 60) * stateC.trackW;

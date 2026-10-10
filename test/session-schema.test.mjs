@@ -72,4 +72,23 @@ describe('Project Session JSON Schema & Persistence (Task 9.3 & 9.4)', () => {
     const result = store.importSessionJSON('invalid { json string');
     assert.equal(result, false);
   });
+
+  test('preserves zoom, currentTime cursor, and editorMode in session export/import', () => {
+    const store = new Store();
+    store.setCurrentTime(14.5);
+    store.setZoom(3.5);
+    store.setEditorMode('piano-roll');
+
+    const json = store.exportSessionJSON();
+    const parsed = JSON.parse(json);
+    assert.equal(parsed.playback.currentTime, 14.5);
+    assert.equal(parsed.view.zoom, 3.5);
+    assert.equal(parsed.view.editorMode, 'piano-roll');
+
+    const store2 = new Store();
+    store2.importSessionJSON(json);
+    assert.equal(store2.getState().playback.currentTime, 14.5);
+    assert.equal(store2.getState().view.zoom, 3.5);
+    assert.equal(store2.getState().view.editorMode, 'piano-roll');
+  });
 });

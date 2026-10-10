@@ -137,4 +137,19 @@ This document records all completed engineering milestones across initial core a
   - Prevents the newly inserted note from being accidentally overwritten when the user clicks the pitch keypad, octave buttons, or duration selectors to prepare the subsequent note.
   - Note blocks in the annotation track remain unselected and unobstructed, while preserving direct click-to-select for deliberate note editing.
 
+---
+
+## 11. Piano Roll Toolbar Streamlining & State Persistence Across Reloads
+- [x] **Removed Redundant Toolbar Buttons in Piano Roll:**
+  - Removed `[+ Insert Note (N)]` and `[✎ Update (U)]` buttons from the Piano Roll card toolbar.
+  - Preserved direct drawing via Draw tool, duration adjustment via `Shift` + Mouse Wheel, and keyboard insertion `N`.
+- [x] **Hidden Chord Marker Button for Future Arpeggiator:**
+  - Chord marker button hidden in the toolbar (`display: none`) and documented as a roadmap item for future harmonic analysis and interactive polyphonic arpeggiator engine.
+- [x] **Zoom & Playhead Cursor Persistence Across Reopen:**
+  - Implemented `saveCurrentStateAndPosition()` attached to `window.beforeunload`, `window.pagehide`, audio seek, zoom changes, and playback pause.
+  - Persists `currentTime`, `zoom`, `editorMode`, horizontal `scrollLeft`, and piano roll vertical `scrollTop` to both `wavescribe_session` and `wavescribe_preferences` in LocalStorage.
+  - Updated `initSessionRestore()` to re-apply target zoom, seek playhead to exact `currentTime`, and restore scroll positions on app reload.
+  - Protected session restore with `isRestoringSession` flag to prevent startup render routines from prematurely overwriting persisted values.
+
+
 

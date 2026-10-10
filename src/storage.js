@@ -120,20 +120,43 @@ export async function clearAudioBlobFromIndexedDb() {
 /**
  * Persists transcription session state to LocalStorage.
  * @param {object} state
+ * @param {object} [viewExtra] - Optional extra view properties (currentTime, zoom, scrollLeft, etc.)
  */
-export function saveSessionToLocalStorage(state) {
+export function saveSessionToLocalStorage(state, viewExtra = {}) {
   try {
     if (typeof localStorage === 'undefined') return;
+    const curTime = (typeof viewExtra.currentTime === 'number')
+      ? viewExtra.currentTime
+      : (state.playback ? state.playback.currentTime : 0);
+    const curZoom = (typeof viewExtra.zoom === 'number')
+      ? viewExtra.zoom
+      : (state.view ? state.view.zoom : 1.0);
+    const curEditorMode = viewExtra.editorMode || (state.view ? state.view.editorMode : 'simple');
+    const curScrollLeft = (typeof viewExtra.scrollLeft === 'number')
+      ? viewExtra.scrollLeft
+      : (state.view ? state.view.scrollLeft : 0);
+    const curPianoRollScrollTop = (typeof viewExtra.pianoRollScrollTop === 'number')
+      ? viewExtra.pianoRollScrollTop
+      : (state.view ? state.view.pianoRollScrollTop : 0);
+
     const sessionData = {
       version: '1.0.0',
       savedAt: Date.now(),
       tempo: state.tempo,
+      theory: state.theory || { activeScale: 'none' },
       tracks: state.tracks,
       notes: state.notes,
       playback: {
-        playbackRate: state.playback.playbackRate,
-        detuneCents: state.playback.detuneCents,
-        loop: state.playback.loop
+        currentTime: curTime,
+        playbackRate: state.playback ? state.playback.playbackRate : 1.0,
+        detuneCents: state.playback ? state.playback.detuneCents : 0,
+        loop: state.playback ? state.playback.loop : { enabled: false, start: 0, end: 0 }
+      },
+      view: {
+        zoom: curZoom,
+        editorMode: curEditorMode,
+        scrollLeft: curScrollLeft,
+        pianoRollScrollTop: curPianoRollScrollTop
       }
     };
     localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(sessionData));

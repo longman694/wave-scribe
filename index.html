@@ -1883,7 +1883,7 @@
           <tr><td><kbd>.</kbd></td><td>Toggle Dotted Note modifier</td></tr>
           <tr><td><kbd>Ctrl</kbd> + <kbd>3</kbd></td><td>Toggle Triplet Tuplet modifier</td></tr>
           <tr><td><kbd>C</kbd></td><td>Insert chord marker at current playhead</td></tr>
-          <tr><td><kbd>Up</kbd> / <kbd>Down</kbd></td><td>Transpose selected note by ±1 semitone (in Piano Roll)</td></tr>
+          <tr><td><kbd>Up</kbd> / <kbd>Down</kbd></td><td>Transpose selected note(s) by ±1 semitone (<kbd>Shift</kbd> for ±1 octave) (Piano Roll)</td></tr>
 
           <tr class="shortcut-section"><td colspan="2">Clipboard &amp; Project Workflow</td></tr>
           <tr><td><kbd>Ctrl</kbd> + <kbd>C</kbd></td><td>Copy selected note to clipboard</td></tr>
@@ -4719,6 +4719,16 @@
 
       if (e.button !== 0) return;
 
+      // (Both modes): Deselect current block(s) when clicking the waveform
+      if (selectedNoteIds.size > 0 || store.getState().view.selectedNoteId) {
+        selectedNoteIds.clear();
+        store.setSelectedNoteId(null);
+        renderAnnotationTrack();
+        if (store.getState().view.editorMode !== 'simple') {
+          renderPianoRollGrid();
+        }
+      }
+
       const track = el.waveformTrack || el.waveformViewport;
       const rect = track.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
@@ -7018,35 +7028,58 @@
       } else if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyY' || (e.shiftKey && e.code === 'KeyZ'))) {
         e.preventDefault();
         store.redo();
-      } else if (e.code === 'ArrowUp') {
-        const selId = store.getState().view.selectedNoteId;
-        const note = selId ? store.getState().notes.find(n => n.id === selId) : null;
-        if (note && store.getState().view.editorMode === 'piano-roll' && note.midi !== null) {
-          e.preventDefault();
-          const nextMidi = Math.min(PIANO_MAX_MIDI, note.midi + 1);
-          store.updateNote(note.id, { midi: nextMidi, pitchName: midiToNoteName(nextMidi) });
-          playNotePreview(nextMidi, 0.25);
-          renderPianoRollGrid();
-          renderSimpleNotesRibbon();
-          renderAnnotationTrack();
-        } else {
-          e.preventDefault();
-          store.setPlaybackRate(store.getState().playback.playbackRate + 0.05);
+      } else if ((e.code === 'ArrowUp' || e.code === 'ArrowDown') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const state = store.getState();
+        const isUp = e.code === 'ArrowUp';
+        const isOctave = e.shiftKey;
+        const step = isOctave ? 12 : 1;
+        const requestedDelta = isUp ? step : -step;
+
+        // Collect all target note IDs from both multi-selection Set and single selectedNoteId
+        const targetIds = new Set(selectedNoteIds);
+        if (state.view.selectedNoteId) {
+          targetIds.add(state.view.selectedNoteId);
         }
-      } else if (e.code === 'ArrowDown') {
-        const selId = store.getState().view.selectedNoteId;
-        const note = selId ? store.getState().notes.find(n => n.id === selId) : null;
-        if (note && store.getState().view.editorMode === 'piano-roll' && note.midi !== null) {
+
+        const selectedNotes = state.notes.filter(n => targetIds.has(n.id) && !n.isRest && typeof n.midi === 'number');
+
+        if (state.view.editorMode === 'piano-roll' && selectedNotes.length > 0) {
           e.preventDefault();
-          const prevMidi = Math.max(PIANO_MIN_MIDI, note.midi - 1);
-          store.updateNote(note.id, { midi: prevMidi, pitchName: midiToNoteName(prevMidi) });
-          playNotePreview(prevMidi, 0.25);
-          renderPianoRollGrid();
-          renderSimpleNotesRibbon();
-          renderAnnotationTrack();
+
+          // Check if all selected notes can move by requestedDelta within [PIANO_MIN_MIDI, PIANO_MAX_MIDI]
+          let canMove = true;
+          for (const n of selectedNotes) {
+            const nextMidi = n.midi + requestedDelta;
+            if (nextMidi < PIANO_MIN_MIDI || nextMidi > PIANO_MAX_MIDI) {
+              canMove = false;
+              break;
+            }
+          }
+
+          if (canMove) {
+            const noteIds = selectedNotes.map(n => n.id);
+            if (noteIds.length === 1) {
+              const note = selectedNotes[0];
+              const nextMidi = note.midi + requestedDelta;
+              store.updateNote(note.id, { midi: nextMidi, pitchName: midiToNoteName(nextMidi) });
+              playNotePreview(nextMidi, 0.25);
+            } else {
+              store.moveNotes(noteIds, { deltaTime: 0, deltaMidi: requestedDelta });
+              // Preview chord notes (up to 4 voices)
+              selectedNotes.slice(0, 4).forEach(n => {
+                playNotePreview(n.midi + requestedDelta, 0.25);
+              });
+            }
+            renderPianoRollGrid();
+            renderSimpleNotesRibbon();
+            renderAnnotationTrack();
+            updateSelectedPitchDisplay();
+          }
         } else {
+          // Default behavior when no note is selected: adjust playback rate
           e.preventDefault();
-          store.setPlaybackRate(store.getState().playback.playbackRate - 0.05);
+          const rateDelta = isUp ? 0.05 : -0.05;
+          store.setPlaybackRate(state.playback.playbackRate + rateDelta);
         }
       }
     });
@@ -7236,6 +7269,8 @@
       getNoteAtPianoRollPos,
       getPianoRollTool: () => currentPianoRollTool,
       setPianoRollTool: (t) => { if (t === 'draw') el.btnToolDraw.click(); else el.btnToolErase.click(); },
+      getSelectedNoteIds: () => selectedNoteIds,
+      setSelectedNoteIds: (set) => { selectedNoteIds = new Set(set); },
       getPeakCache: () => currentPeakCache,
       synthesizeNoteVoice,
       openNoteEditorModal,

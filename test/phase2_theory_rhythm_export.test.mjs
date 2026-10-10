@@ -180,5 +180,21 @@ describe('Phase 2 Unit Tests: Scale Theory, Swing Rhythm & Letter Notes Export',
       assert.ok(output.includes('Key: F Major'));
       assert.ok(output.includes('Grid: 8 dashes per bar'));
     });
+
+    test('supports first beat offset with pickup bar in letter notes', () => {
+      const store = new Store();
+      store.setBpm(120); // 1 beat = 0.5s, 1/8 note = 0.25s
+      store.setGridOffset(1.0); // Beat 1 starts at 1.0s
+
+      // Pickup note at 0.75s (1 eighth note before Beat 1 -> slot 7)
+      store.addNote({ pitchName: 'G4', startTime: 0.75, duration: 0.25 });
+      // Measure 1 notes at 1.0s and 1.5s
+      store.addNote({ pitchName: 'C4', startTime: 1.0, duration: 0.5 });
+      store.addNote({ pitchName: 'E4', startTime: 1.5, duration: 0.5 });
+
+      const output = exportLetterNotes(store.getState());
+      assert.ok(output.includes('Pickup : - - - - - - - G |'), `Expected pickup bar with G at slot 7, got:\n${output}`);
+      assert.ok(output.includes('M01-01: C - E - - - - - |'), `Expected Measure 1 notes, got:\n${output}`);
+    });
   });
 });

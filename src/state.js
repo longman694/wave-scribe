@@ -479,12 +479,41 @@ export function exportLetterNotes(state) {
     barsOutput.push(slots.join(' '));
   }
 
+  // Process pickup bar if notes exist before first beat offset (gridOffset)
+  let pickupLine = '';
+  if (gridOffset > 0) {
+    const pickupNotes = notes.filter(n => n.startTime < gridOffset - 1e-4);
+    if (pickupNotes.length > 0) {
+      const pickupSlots = new Array(slotsPerBar).fill('-');
+      pickupNotes.forEach(n => {
+        const timeBeforeBeat1 = gridOffset - n.startTime;
+        const eighthsBefore = Math.round(timeBeforeBeat1 / eighthSec);
+        const s = slotsPerBar - eighthsBefore;
+        if (s >= 0 && s < slotsPerBar) {
+          const letter = (n.pitchName || 'C').replace(/-?\d+$/, '');
+          pickupSlots[s] = (pickupSlots[s] === '-') ? letter : (pickupSlots[s] + letter);
+          const sustainSlots = Math.round(n.duration / eighthSec);
+          for (let fill = 1; fill < sustainSlots && (s + fill) < slotsPerBar; fill++) {
+            if (pickupSlots[s + fill] === '-') {
+              pickupSlots[s + fill] = '-';
+            }
+          }
+        }
+      });
+      pickupLine = `Pickup : ${pickupSlots.join(' ')} |\n\n`;
+    }
+  }
+
   // Format into grouped measures (4 measures per line)
   let text = `================================================================================\n`;
   text += `Title: ${songTitle}\n`;
   text += `Tempo: ${bpm} BPM | Time Signature: ${timeSig[0]}/${timeSig[1]} | Key: ${scaleName}\n`;
   text += `Grid: 8 dashes per bar (1 dash = 1/8 note | e.g. Quarter = C - | Half = D - - - )\n`;
   text += `================================================================================\n\n`;
+
+  if (pickupLine) {
+    text += pickupLine;
+  }
 
   const measuresPerLine = 4;
   for (let i = 0; i < barsOutput.length; i += measuresPerLine) {

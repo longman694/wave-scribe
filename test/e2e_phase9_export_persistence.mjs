@@ -266,6 +266,7 @@ async function run() {
 
   // --- Task 9.4: Resilient Local Persistence (IndexedDB + LocalStorage) ---
   console.log('\n--- Verifying Task 9.4: Resilient Local Persistence (IndexedDB + LocalStorage) ---');
+  await new Promise(r => setTimeout(r, 500));
 
   // Check LocalStorage saved session
   const storageCheck = await evaluate(`(() => {

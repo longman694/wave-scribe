@@ -160,6 +160,42 @@ export function encodeMusicXml(state) {
   xml += `  </part-list>
 `;
 
+  // First beat offset in seconds and divisions (Measure 1 downbeat)
+  const gridOffset = (state.tempo && typeof state.tempo.gridOffset === 'number') ? Math.max(0, state.tempo.gridOffset) : 0;
+  const gridOffsetDiv = Math.round(gridOffset * (bpm / 60) * DIVISIONS);
+
+  // Identify any notes before first beat offset (pickup notes / anacrusis)
+  const allPickupNotes = notes.filter(n => {
+    if (n.isRest || n.pitchName === 'REST' || n.pitchName === 'R') return false;
+    const startSec = Math.max(0, n.startTime);
+    const startDiv = Math.round(startSec * (bpm / 60) * DIVISIONS);
+    return startDiv < gridOffsetDiv;
+  });
+  const hasPickup = allPickupNotes.length > 0;
+
+  let minPickupStartDiv = gridOffsetDiv;
+  let pickupDivisions = 0;
+  if (hasPickup) {
+    minPickupStartDiv = Math.min(...allPickupNotes.map(n => {
+      const startSec = Math.max(0, n.startTime);
+      return Math.round(startSec * (bpm / 60) * DIVISIONS);
+    }));
+    pickupDivisions = Math.max(1, gridOffsetDiv - minPickupStartDiv);
+  }
+
+  // Calculate maximum end division across all notes to determine total regular measures
+  let maxEndDiv = gridOffsetDiv;
+  notes.forEach(n => {
+    const startSec = Math.max(0, n.startTime);
+    const durSec = Math.max(0.01, n.duration);
+    const startDiv = Math.round(startSec * (bpm / 60) * DIVISIONS);
+    const durDiv = Math.max(1, Math.round(durSec * (bpm / 60) * DIVISIONS));
+    const endDiv = startDiv + durDiv;
+    if (endDiv > maxEndDiv) maxEndDiv = endDiv;
+  });
+  const regularDivisions = Math.max(0, maxEndDiv - gridOffsetDiv);
+  const totalRegularMeasures = Math.max(1, Math.ceil(regularDivisions / divisionsPerMeasure));
+
   // Render each part
   tracks.forEach((track, trackIndex) => {
     const partId = `P${trackIndex + 1}`;
@@ -169,14 +205,6 @@ export function encodeMusicXml(state) {
     xml += `  <part id="${partId}">
 `;
 
-    // Calculate maximum measure index
-    let maxTime = 0;
-    trackNotes.forEach(n => {
-      const end = n.startTime + n.duration;
-      if (end > maxTime) maxTime = end;
-    });
-    const totalMeasures = Math.max(1, Math.ceil(maxTime / measureSeconds));
-
     // Pre-split all notes into measure segments with ties across barlines
     const allSegments = [];
     trackNotes.forEach(note => {
@@ -184,43 +212,89 @@ export function encodeMusicXml(state) {
       const pitch = isRest ? null : parsePitchComponents(note.pitchName, note.midi);
       const startSec = Math.max(0, note.startTime);
       const durSec = Math.max(0.01, note.duration);
-      const endSec = startSec + durSec;
-
-      const startDiv = Math.max(0, Math.round(startSec * (bpm / 60) * DIVISIONS));
+      const startDiv = Math.round(startSec * (bpm / 60) * DIVISIONS);
       const totalDurDiv = Math.max(1, Math.round(durSec * (bpm / 60) * DIVISIONS));
       const endDiv = startDiv + totalDurDiv;
 
       let currDiv = startDiv;
       while (currDiv < endDiv) {
-        const mIndex = Math.floor(currDiv / divisionsPerMeasure);
-        const mEndDiv = (mIndex + 1) * divisionsPerMeasure;
-        const segEndDiv = Math.min(endDiv, mEndDiv);
-        const segDurDiv = segEndDiv - currDiv;
+        if (currDiv < gridOffsetDiv) {
+          if (!hasPickup) {
+            currDiv = Math.min(endDiv, gridOffsetDiv);
+            continue;
+          }
+          if (currDiv < minPickupStartDiv) {
+            currDiv = Math.min(endDiv, minPickupStartDiv);
+            continue;
+          }
+          // Pickup measure (Measure 0)
+          const segEndDiv = Math.min(endDiv, gridOffsetDiv);
+          const segDurDiv = segEndDiv - currDiv;
+          if (segDurDiv > 0) {
+            allSegments.push({
+              measureNum: 0,
+              isPickup: true,
+              startDivInMeasure: currDiv - minPickupStartDiv,
+              durDivisions: segDurDiv,
+              isRest,
+              pitch,
+              chordLabel: (currDiv === startDiv) ? note.chordLabel : null,
+              tieStart: segEndDiv < endDiv,
+              tieStop: currDiv > startDiv
+            });
+          }
+          currDiv = segEndDiv;
+        } else {
+          // Regular measures (Measure 1..N)
+          const relCurrDiv = currDiv - gridOffsetDiv;
+          const mIndex = Math.floor(relCurrDiv / divisionsPerMeasure);
+          const mEndDiv = gridOffsetDiv + (mIndex + 1) * divisionsPerMeasure;
+          const segEndDiv = Math.min(endDiv, mEndDiv);
+          const segDurDiv = segEndDiv - currDiv;
 
-        if (segDurDiv > 0) {
-          allSegments.push({
-            measureIndex: mIndex,
-            startDivInMeasure: currDiv - (mIndex * divisionsPerMeasure),
-            durDivisions: segDurDiv,
-            isRest,
-            pitch,
-            chordLabel: (currDiv === startDiv) ? note.chordLabel : null,
-            tieStart: segEndDiv < endDiv,
-            tieStop: currDiv > startDiv
-          });
+          if (segDurDiv > 0) {
+            allSegments.push({
+              measureNum: mIndex + 1,
+              isPickup: false,
+              startDivInMeasure: relCurrDiv - (mIndex * divisionsPerMeasure),
+              durDivisions: segDurDiv,
+              isRest,
+              pitch,
+              chordLabel: (currDiv === startDiv) ? note.chordLabel : null,
+              tieStart: segEndDiv < endDiv,
+              tieStop: currDiv > startDiv
+            });
+          }
+          currDiv = segEndDiv;
         }
-        currDiv = segEndDiv;
       }
     });
 
-    for (let m = 0; m < totalMeasures; m++) {
-      const measureNum = m + 1;
+    // Build measure sequence
+    const measureList = [];
+    if (hasPickup) {
+      measureList.push({ number: 0, isPickup: true, capacity: pickupDivisions });
+    }
+    for (let m = 1; m <= totalRegularMeasures; m++) {
+      measureList.push({ number: m, isPickup: false, capacity: divisionsPerMeasure });
+    }
 
-      xml += `    <measure number="${measureNum}">
+    measureList.forEach((measureInfo, mIdx) => {
+      const isFirstMeasureOfPart = (mIdx === 0);
+      const isPickup = measureInfo.isPickup;
+      const measureNum = measureInfo.number;
+      const measureCapacity = measureInfo.capacity;
+
+      if (isPickup) {
+        xml += `    <measure number="0" implicit="yes">
 `;
+      } else {
+        xml += `    <measure number="${measureNum}">
+`;
+      }
 
-      // Measure 1 contains initial attributes
-      if (measureNum === 1) {
+      // First measure of part contains initial attributes & tempo direction
+      if (isFirstMeasureOfPart) {
         xml += `      <attributes>
         <divisions>${DIVISIONS}</divisions>
         <key>
@@ -248,13 +322,13 @@ export function encodeMusicXml(state) {
       }
 
       // Find segments for this measure
-      const measureSegments = allSegments.filter(s => s.measureIndex === m);
+      const measureSegments = allSegments.filter(s => s.measureNum === measureNum);
 
       if (measureSegments.length === 0) {
         // Empty Measure Rest
         xml += `      <note>
         <rest/>
-        <duration>${divisionsPerMeasure}</duration>
+        <duration>${measureCapacity}</duration>
         <voice>1</voice>
       </note>
 `;
@@ -303,12 +377,12 @@ export function encodeMusicXml(state) {
               tieStop: seg.tieStop
             });
           });
-          currentMeasureCursor = Math.min(divisionsPerMeasure, currentMeasureCursor + primaryDur);
+          currentMeasureCursor = Math.min(measureCapacity, currentMeasureCursor + primaryDur);
         });
 
         // If measure is not filled to capacity, pad with trailing rest
-        if (currentMeasureCursor < divisionsPerMeasure) {
-          const trailingGap = divisionsPerMeasure - currentMeasureCursor;
+        if (currentMeasureCursor < measureCapacity) {
+          const trailingGap = measureCapacity - currentMeasureCursor;
           xml += renderNoteXml({
             isChord: false,
             isRest: true,
@@ -316,13 +390,13 @@ export function encodeMusicXml(state) {
             durDivisions: trailingGap,
             noteType: getNoteType(trailingGap)
           });
-          currentMeasureCursor = divisionsPerMeasure;
+          currentMeasureCursor = measureCapacity;
         }
       }
 
       xml += `    </measure>
 `;
-    }
+    });
 
     xml += `  </part>
 `;

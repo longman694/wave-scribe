@@ -1058,7 +1058,7 @@ export class Store {
 
     if (updates.midi !== undefined && !note.isRest) {
       note.midi = updates.midi;
-      note.pitchName = midiToNoteName(updates.midi);
+      note.pitchName = updates.pitchName !== undefined ? sanitizeText(updates.pitchName) : midiToNoteName(updates.midi);
     } else if (updates.pitchName !== undefined && !note.isRest) {
       note.pitchName = sanitizeText(updates.pitchName);
       if (note.pitchName === 'REST' || note.pitchName === 'R') {

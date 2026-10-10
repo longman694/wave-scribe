@@ -123,7 +123,13 @@ async function run() {
     return res.result ? res.result.value : undefined;
   }
 
-  await wait(600);
+  for (let i = 0; i < 30; i++) {
+    try {
+      const res = await sendCdp('Runtime.evaluate', { expression: 'Boolean(window.__WAVESCRIBE_APP__)', returnByValue: true });
+      if (res && res.result && res.result.value) break;
+    } catch {}
+    await wait(200);
+  }
 
   // Initialize test project state
   await evaluate(`

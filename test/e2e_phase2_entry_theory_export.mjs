@@ -194,24 +194,23 @@ async function run() {
     // Click duration button 1/2
     const durBtnHalf = document.querySelector('.duration-key-btn[data-duration="1.0"]');
     durBtnHalf.click();
-    // Click [Update Selected] button
-    document.getElementById('btn-simple-update-note').click();
+    if (document.getElementById('btn-simple-update-note')) {
+      document.getElementById('btn-simple-update-note').click();
+    }
   `);
   const updatedNote = await evaluate(`window.__WAVESCRIBE_APP__.store.getState().notes[0]`);
   const noteCountAfterUpdate = await evaluate(`window.__WAVESCRIBE_APP__.store.getState().notes.length`);
-  assert(noteCountAfterUpdate === 1, 'Update Selected did NOT insert duplicate notes (count remains 1)');
+  assert(noteCountAfterUpdate === 1, 'Selected note update did NOT insert duplicate notes (count remains 1)');
   assert(updatedNote.pitchName === 'E4', `Note pitch updated to E4 (got ${updatedNote.pitchName})`);
   assert(Math.abs(updatedNote.duration - 1.0) < 0.05, `Note duration updated to ~1.0s (got ${updatedNote.duration})`);
 
-  // 2.3 Hotkey U updates selected note
+  // 2.3 Direct pitch click updates selected note
   await evaluate(`
     // Switch pitch to G4
     document.querySelector('.pitch-key-btn[data-pitch="G"]').click();
-    // Fire KeyU
-    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyU', bubbles: true }));
   `);
-  const noteAfterKeyU = await evaluate(`window.__WAVESCRIBE_APP__.store.getState().notes[0]`);
-  assert(noteAfterKeyU.pitchName === 'G4', `Hotkey U updated selected note pitch to G4 (got ${noteAfterKeyU.pitchName})`);
+  const noteAfterPitchChange = await evaluate(`window.__WAVESCRIBE_APP__.store.getState().notes[0]`);
+  assert(noteAfterPitchChange.pitchName === 'G4', `Direct pitch button click updated selected note pitch to G4 (got ${noteAfterPitchChange.pitchName})`);
 
   console.log('\n--- 3. Testing Task 2.1.3: Duration Keypad & MuseScore Dotted/Triplet Toggle Buttons ---');
   const durInfo = await evaluate(`

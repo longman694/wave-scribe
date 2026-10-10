@@ -1,146 +1,240 @@
-# Agent Specification: Modern Single-Page Web Audio Transcriber
+# Agent Specification: WaveScribe (Modern Single-Page Web Audio Transcriber)
 
 ## Role & Mission
-**Role:** Principal Frontend & Web Audio Engineer  
-**Objective:** Deliver a production-grade, zero-backend, single-page web transcription application (`index.html`) running entirely in modern browsers. The application empowers musicians, transcribers, and educators to transcribe complex audio by ear with ultra-low latency, crystal-clear high-DPI visualization, and sample-accurate synchronization between audio playback and transcribed musical notes.
+**Role:** Principal Frontend & Web Audio Systems Engineer  
+**Objective:** Maintain, extend, and preserve the production-grade, zero-backend, single-page web transcription application ([index.html](file:///d:/Programing/music-transcriber/index.html)) running entirely in modern browsers. The application empowers musicians, transcribers, and educators to transcribe complex audio by ear with ultra-low latency, crystal-clear high-DPI visualization, and sample-accurate synchronization between audio playback and transcribed musical notes.
 
 ---
 
-## Architectural Principles & Core Constraints
+## 1. Architectural Principles & Invariants
 
 1. **Zero Backend & Single-File Portability:**
-   - The entire application lives in a self-contained `index.html` (or self-contained SPA with optionally modular ESM code bundled or cleanly imported via reliable CDN/ESM gateways such as `esm.sh` or unpkg).
-   - No server-side audio processing, database, or API dependencies.
-   - Operates fully offline once loaded.
+   - The primary application lives in a self-contained [index.html](file:///d:/Programing/music-transcriber/index.html) with modular ESM architecture in [src/state.js](file:///d:/Programing/music-transcriber/src/state.js) and [src/](file:///d:/Programing/music-transcriber/src).
+   - No server-side audio processing, backend database, or cloud dependencies. Operates fully offline once loaded.
+   - Clean CDN/ESM gateways (e.g. `esm.sh`) for external modules if needed.
 
-2. **Deterministic Audio Synchronization & Web Audio Architecture:**
-   - **Playback & Pitch Preservation:** Uses modern HTML5 Audio element integrated into Web Audio API (`AudioContext.createMediaElementSource`), enabling native browser pitch preservation (`audio.preservesPitch = true`) when adjusting playback speed from $0.25\times$ to $2.00\times$.
-   - **Fine Cents Detuning:** Fine-tuning ($\pm 50$ cents) for off-pitch vintage/historical recordings is supported via Web Audio pitch-detuning compensation or AudioBuffer playback node processing.
-   - **Sample-Accurate Clock:** Playhead tracking and visual updates synchronize with audio playback state using `requestAnimationFrame` and microsecond-precision audio timestamps (`MM:SS.mmm`).
+2. **Deterministic Audio Clock & Web Audio Pipeline:**
+   - **Dual Audio Pipeline:** HTML5 `AudioElement` routed into `AudioContext.createMediaElementSource(audio)` provides streaming decoding for large audio files (MP3, WAV, FLAC, M4A, OGG) with native browser timestretching (`audio.preservesPitch = true`) from $0.25\times$ to $2.00\times$.
+   - **Waveform Peak Cache:** Audio is simultaneously decoded in the background via `AudioContext.decodeAudioData` to generate precomputed multi-resolution peak buffers for multi-zoom waveform drawing.
+   - **Fine Cents Detuning ($\pm 50$ cents):** Compensates for vintage or non-standard recordings (A4 = 432–448 Hz) via Web Audio detuning.
+   - **Click-Free Gain Envelopes:** All synth voice allocations use exponential or linear gain ramps (`gainNode.gain.setValueAtTime`, `exponentialRampToValueAtTime`) to prevent audio popping.
+   - **Audition Anchor Preservation:** Auditioning clicked notes or keys preserves `lastPlaybackAnchorTime` so pressing `Space` resumes from the actual playback position rather than jumping to the auditioned note.
 
-3. **Explicit State & Strict Data Schemas:**
-   - Every musical event (note, chord, marker) is defined by explicit timestamp ranges in seconds (`startTime`, `duration`, `endTime`), pitch identifiers (MIDI number $21\dots 108$ and scientific pitch name e.g., `C4`), velocity, and track ID.
-   - Musical grid/snap coordinates (bars, beats, subdivisions) are derived dynamically via a configurable Tempo Map (BPM, meter/time signature, offset).
+3. **Strict Data Schemas & Explicit State:**
+   - Notes are represented with explicit start times in seconds, duration in seconds, MIDI numbers ($21\dots 108$), note names, velocity, and track ID.
+   - Tempo state is stored in `state.tempo` with `bpm`, `timeSignature`, `gridSnap`, `swingFactor`, and `gridOffset`.
 
 4. **Resilient Local Persistence:**
-   - **Audio File Cache:** Stored in **IndexedDB** (`audioBlob`, metadata, file name, duration, waveform peak cache) so user audio survives page reloads without re-uploading.
-   - **Session State & Transcriptions:** Stored in **LocalStorage** with automatic debounced autosave and versioned JSON serialization.
+   - **Audio Blobs:** Stored in **IndexedDB** (`MusicTranscriberDB`, store `audioFiles`).
+   - **Session State:** Stored in **LocalStorage** (`wavescribe_session_state`) with debounced auto-save.
 
 5. **Aesthetics & Ergonomics:**
-   - Modern dark UI based on slate/zinc tones (`#09090b` background, `#18181b` card surfaces, `#27272a` borders).
-   - Vibrant semantic accents: Electric Cyan (`#38bdf8`) for playheads/active waveform, Emerald (`#10b981`) for notes, Rose (`#f43f5e`) for loop boundaries, Amber (`#f59e0b`) for warnings/chords.
-   - Monospace typographic readouts for timestamps, notes, and BPM to eliminate layout shift.
+   - Dark theme based on slate/zinc palette (`#09090b` background, `#18181b` card surfaces, `#27272a` borders).
+   - Semantic accents: Electric Cyan (`#38bdf8`) for playheads/active waveform, Emerald (`#10b981`) for notes, Rose (`#f43f5e`) for loop boundaries, Amber (`#f59e0b`) for downbeat `1.1` marker line and warnings.
+   - High-DPI canvas rendering scaling with `window.devicePixelRatio`.
 
 ---
 
-## Technical Architecture & Module Structure
+## 2. Layout Synchronization & Sub-Pixel Alignment Architecture
 
-```
-+---------------------------------------------------------------------------------------+
-|                                    User Interface                                     |
-|  [Header / Project Bar]   [Transport & Looping Bar]   [Tempo / Pitch / Tuning Bar]     |
-|  +---------------------------------------------------------------------------------+  |
-|  | Multi-Zoom Waveform Canvas (Overview + Detail + Loop Markers A/B + Playhead)     |  |
-|  +---------------------------------------------------------------------------------+  |
-|  | Synchronized Note / Chord Event Track (Quick marker lane & visual blocks)       |  |
-|  +---------------------------------------------------------------------------------+  |
-|  | Interactive Piano Roll Canvas (A0-C8 Grid, Note Draw/Resize, Snapping)          |  |
-|  +---------------------------------------------------------------------------------+  |
-|  | Multi-Track Mixer & Instrument Controls (Melody / Bass / Chords / Volumes)       |  |
-+---------------------------------------------------------------------------------------+
-                                           |
-+------------------------------------------v--------------------------------------------+
-|                                State & Session Manager                                 |
-|  - Reactive Session State (Tracks, Notes, Loop Region, Zoom, Tempo, Snap)             |
-|  - History / Undo-Redo Stack (Action-based command pattern)                           |
-|  - Persistence Controller: IndexedDB (Audio Blobs) + LocalStorage (Session JSON)       |
-+---------------------------------------------------------------------------------------+
-                                           |
-+------------------------------------------v--------------------------------------------+
-|                             Audio Engine & Synthesizer                                |
-|  - Reference Audio Pipeline: MediaElementSource / AudioBufferSource + GainNode        |
-|  - Playback Rate Controller (0.25x - 2.00x, preservesPitch=true)                      |
-|  - Polyphonic Synthesis Engine: Web Audio voice pool (Sine, Triangle, E-Piano, ADSR)  |
-|  - Master Mixer: Reference Audio Gain, Synth Gain, Solo/Mute matrix                    |
-|  - Metronome & Tap Tempo Controller                                                   |
-+---------------------------------------------------------------------------------------+
-                                           |
-+------------------------------------------v--------------------------------------------+
-|                               IO & Format Encoders                                    |
-|  - Standard MIDI (.mid) Binary Writer (SMF Type 1, track chunk serialization)          |
-|  - MusicXML Document Builder (DOMSerializer, measures, pitch, duration)               |
-|  - JSON Project Session Import/Export                                                 |
-+---------------------------------------------------------------------------------------+
-```
+### The Alignment Problem
+In **Piano Roll Mode**, the view consists of two stacked timeline containers:
+1. The **Waveform Overview** at the top.
+2. The **Piano Roll Grid** at the bottom, which contains an 88-key vertical pitch gutter on the left and a vertical scrollbar on the right.
+
+If the waveform overview is rendered at 100% full width, the time $T$ on the waveform is horizontally shifted relative to time $T$ on the piano roll grid. Furthermore, at high zoom factors (e.g., $8\times$ to $30\times$), even a 6px width discrepancy causes virtual canvas widths to diverge by hundreds of pixels, resulting in playhead drift.
+
+### The Layout Solution
+- **Left Gutter Matching:**
+  The `.waveform-viewport-wrapper` contains a `.waveform-gutter` element with an exact width of `68px` and a `1px` border (`border-right: 1px solid var(--border-subtle)`), identical to `.piano-keys-gutter`.
+  In Piano Roll mode:
+  ```css
+  .waveform-viewport-wrapper.has-gutter .waveform-gutter {
+    display: block;
+    width: 68px;
+    flex-shrink: 0;
+  }
+  ```
+  Both timelines start at the exact same screen coordinate: $X = 69\text{px}$.
+
+- **Vertical Scrollbar Compensation:**
+  The piano roll container (`.piano-roll-grid-container`) has `overflow-y: auto` with a 6px scrollbar (`::-webkit-scrollbar { width: 6px; }`).
+  To prevent timeline width divergence, `.waveform-container` receives `padding-right: 6px` in Piano Roll mode:
+  ```css
+  .waveform-viewport-wrapper.has-gutter .waveform-container {
+    padding-right: 6px;
+  }
+  ```
+  This guarantees that the client width of the waveform matches the client width of the piano roll grid, locking playheads and grid lines to $< 1.1\text{px}$ tolerance across all zoom factors.
+
+- **Dynamic Mode Transitions:**
+  When switching to **Simple Mode**, `.has-gutter` is removed from `.waveform-viewport-wrapper`:
+  - `.waveform-gutter` becomes `display: none`.
+  - `padding-right` is restored to `0`.
+  - The waveform expands to 100% full width, aligning with the monophonic Annotation Track lane.
 
 ---
 
-## Audio Engine Details
+## 3. Note Selection State Machine & "The Mutation Trap"
 
-### 1. Dual Audio Source Strategy
-- **Primary Source (Streaming Audio Element):**
-  Uses `HTMLAudioElement` routed to `AudioContext.createMediaElementSource(audio)`. This provides streaming decoding for large files (MP3, WAV, FLAC, M4A, OGG) and native browser timestretching (`audio.preservesPitch = true`) when `audio.playbackRate` changes between $0.25\times$ and $2.00\times$.
-- **Offline Waveform Decoding:**
-  Simultaneously decodes the audio file with `AudioContext.decodeAudioData` in a Web Worker or async task to extract high-resolution peak buffers for multi-zoom waveform drawing.
+### The Issue
+In music transcription, users frequently operate in step-time:
+1. Select pitch (e.g., `C4`), select duration (e.g., `1/4`), insert note.
+2. Select next pitch (e.g., `E4`), select duration, insert note.
 
-### 2. Built-in Polyphonic Synthesizer
-- Built using native Web Audio oscillator nodes and gain envelopes:
-  - **Melody Lane:** Crisp sine lead with subtle vibrato and quick attack/release.
-  - **Bass Lane:** Warm triangle/sub oscillator with low-pass filtering.
-  - **Chord Lane:** Polyphonic electric piano timbre (multi-harmonic additive synth with exponential decay).
-- Supports independent voice allocation, note-on/note-off scheduling synchronized with audio clock, and zero audio clicks (proper click-free gain ramping).
+If `addNote()` or note insertion automatically selects the newly created note (`selectedNoteId = note.id`), then clicking the pitch keypad (e.g., `E`) or octave buttons to prepare for the *next* note mutates the *current* note that was just inserted. Furthermore, selected notes display active outline borders and badges that obstruct the visual boundaries of incoming notes.
 
-### 3. Loop Engine
-- Seamless A-B looping monitors playback time in the high-frequency clock loop. When `currentTime >= loopEnd`, the playhead instantly seeks to `loopStart`.
-- Visual selection handles on the waveform allow dragging the in-point and out-point with microsecond precision.
-
----
-
-## Keyboard Shortcuts Specification
-
-| Key | Action |
-| :--- | :--- |
-| `Space` | Play / Pause |
-| `Left` / `Right` | Skip backward / forward by 1.0 second |
-| `Shift` + `Left` / `Right` | Skip backward / forward by 5.0 seconds |
-| `[` or `I` | Set Loop Start ($A$) at current playhead position |
-| `]` or `O` | Set Loop End ($B$) at current playhead position |
-| `Esc` | Clear active loop region |
-| `L` | Toggle Loop playback mode On / Off |
-| `N` | Insert note at current playhead position |
-| `C` | Insert chord marker at current playhead position |
-| `Up` / `Down` | Adjust playback speed by $\pm 0.05\times$ |
-| `M` | Mute reference audio (synth solo) |
-| `S` | Solo transcript synth |
-| `Delete` / `Backspace` | Delete selected note(s) |
-| `Ctrl` / `Cmd` + `Z` | Undo last edit |
-| `Ctrl` / `Cmd` + `Y` / `Shift`+`Z` | Redo edit |
+### Invariant: Deselect on Insert & Paste
+- **Simple Mode Insertion:**
+  In Simple mode, inserting a note via the `[+ Insert Note]` button, hotkey `N`, or pressing `Enter` in the pitch input box must always clear selection (`store.setSelectedNoteId(null)`).
+- **Piano Roll Draw & Paste:**
+  Drawing a note with the Draw tool or pasting notes via `Ctrl+V` must clear active selection (`selectedNoteIds.clear()`, `store.setSelectedNoteId(null)`).
+- **Subsequent Modifications:**
+  Adjusting duration (via UI buttons or `Shift` + Mouse Wheel) when no note is selected updates the default duration for the *next* note without altering existing notes.
+- **Explicit Selection:**
+  Users can deliberately click directly on an existing note block or piano roll block to select and edit it.
+- **Empty Canvas Click:**
+  Clicking anywhere in the empty space of `.annotation-track-lane` or the piano roll grid immediately deselects active notes.
 
 ---
 
-## Verification & Testing Methodology
+## 4. Musical Timing & Synchronization Engine
 
-1. **Unit Testing (Node.js 22 Test Runner):**
-   - Headless unit tests for:
-     - Pitch name $\leftrightarrow$ MIDI note number conversions (e.g., `C4` $\rightarrow$ 60, `F#3` $\rightarrow$ 54, 440 Hz reference).
-     - Musical grid snapping calculations (time in seconds $\leftrightarrow$ beat fractions at arbitrary BPM).
-     - MIDI binary file builder (validating Standard MIDI File header `MThd`, track chunks `MTrk`, delta times, note-on/note-off events).
-     - MusicXML generation (validating XML schema structure, measure division, note pitch, and duration elements).
-     - Session serialization & deserialization schema validation.
+### 1. BPM Proportional Duration Scaling
+- Note durations are stored in absolute seconds (`note.duration`).
+- Musically, notes represent beat subdivisions (quarter note, eighth note, etc.).
+- When `Store.prototype.setBpm(newBpm)` is called, all existing note durations must scale proportionally:
+  $$\text{duration}_{\text{new}} = \text{duration}_{\text{old}} \times \frac{\text{bpm}_{\text{old}}}{\text{bpm}_{\text{new}}}$$
+- This preserves musical rhythm relative to the tempo. The action is recorded in the Undo/Redo stack for non-destructive history.
 
-2. **Automated Browser End-to-End Tests:**
-   - Local HTTP server hosting `index.html`.
-   - Browser automation runner verifying:
-     - Audio file drag-and-drop / loading workflow.
-     - Canvas waveform initialization and zoom scaling.
-     - Playback transport controls (Play, Pause, Seek).
-     - A-B loop setting and loop boundary rewind logic.
-     - Note creation, editing, dragging, resizing on the Piano Roll.
-     - Polyphonic synth audio nodes instantiation.
-     - MIDI and JSON session export download triggers.
-     - LocalStorage and IndexedDB persistence across reload.
+### 2. Downbeat Alignment (`gridOffset`)
+- Recorded audio rarely aligns with Measure 1 Beat 1 at exactly $t = 0.000\text{s}$.
+- `gridOffset` represents the timestamp (in seconds) of Downbeat 1.1.
+- All timeline calculations must offset by `gridOffset`:
+  $$\text{quantizeTime}(t) = \text{quantizeTime}(t - \text{gridOffset}) + \text{gridOffset}$$
+- The Downbeat 1.1 line is rendered on both the Waveform and Piano Roll grid in vibrant Amber (`#f59e0b`, 2px glow) with an interactive draggable badge.
 
-3. **Visual & Auditory QA:**
-   - Dark theme contrast compliance (WCAG AA).
-   - High-DPI canvas crispness on retina displays (`window.devicePixelRatio`).
-   - Glitch-free audio playback during rate adjustments and synth playback.
+### 3. Swing Groove Engine
+- Quantization supports straight (50%), light swing (58%), triplet swing (66%), and hard swing (75%).
+- Off-beat eighth note positions shift dynamically during snap and playback scheduling.
+
+### 4. Musical Duration Formatting
+- Durations are converted between seconds and musical names via `durationToNoteName(seconds, bpm)`:
+  - Supports $1/1$, $1/2$, $1/4$, $1/8$, $1/16$, $1/32$, $1/64$.
+  - Dotted notes: $1/2.$, $1/4.$, $1/8.$, $1/16.$.
+  - Triplets: $1/4\text{T}$, $1/8\text{T}$, $1/16\text{T}$.
+
+---
+
+## 5. Home Button & Viewport Rewind Mechanics
+
+### Rewind Target Priority
+When the Home action is triggered (via transport button `⏮` or keyboard shortcut `Home`):
+1. **Loop Active:** If A-B looping is enabled (`loop.enabled && loop.start >= 0`), seek to **Loop Start ($A$)**.
+2. **Loop Inactive:** Seek to the **Beat 1 Downbeat Line** (`tempo.gridOffset`, defaulting to 0).
+
+### Viewport Auto-Scroll Rule
+Seeking via Home must guarantee that the playhead cursor is visible in the view area:
+- `calculateHomeViewportScroll(targetTime, zoom, viewportWidth)` computes the target scroll position.
+- Viewports (`waveformViewport`, `annotationViewport`, `pianoRollGridContainer`) scroll smoothly to keep the playhead within visible margins.
+
+---
+
+## 6. Piano Roll Interaction & Event Model
+
+1. **Vertical Wheel Scrolling:**
+   - Normal mouse wheel scroll over the Piano Roll canvas, container, or left gutter scrolls the vertical pitch grid up and down (`scrollTop += deltaY`).
+   - Page scroll is prevented (`e.preventDefault()`).
+   - Left piano keys gutter scrolls synchronously in lockstep.
+
+2. **Shift + Wheel Duration Adjustment:**
+   - Holding `Shift` while scrolling the mouse wheel steps through duration presets ($1/64$ to $1/1$).
+   - If hovering over the empty grid, it adjusts the ghost preview duration and persists `lastPianoRollDuration`.
+   - If a note is selected, it updates the selected note's duration.
+   - Displays real-time toast feedback with the musical note name.
+
+3. **Timeline Panning:**
+   - Middle-click drag and `Shift` + Left-click drag smoothly pan the timeline horizontally.
+
+4. **Hover Preview & Audio Invariance:**
+   - Hovering over the Piano Roll grid shows a visual ghost note block with duration badge and highlights the corresponding key in the piano gutter.
+   - **No Audio on Hover:** Pitch preview audio on hover is intentionally disabled to avoid auditory clutter while moving across the grid. Pitch audition occurs on explicit key click, note placement, or keyboard audition.
+
+---
+
+## 7. Keyboard Shortcuts Specification
+
+| Key / Shortcut | Action | Scope |
+| :--- | :--- | :--- |
+| `Space` | Play / Pause audio playback | Global |
+| `Left` / `Right` | Skip backward / forward by 1.0 second | Global |
+| `Shift` + `Left` / `Right` | Skip backward / forward by 5.0 seconds | Global |
+| `Home` | Rewind to Loop $A$ or Beat 1 Downbeat line (auto-scroll into view) | Global |
+| `[` or `I` | Set Loop Start ($A$) at current playhead position | Global |
+| `]` or `O` | Set Loop End ($B$) at current playhead position | Global |
+| `L` | Toggle Loop playback mode On / Off | Global |
+| `Esc` | Clear active loop region / Deselect note | Global |
+| `N` | Insert note at current playhead position | Global |
+| `Delete` / `Backspace` | Delete selected note(s) | Global |
+| `T` | Tap Tempo (calculates BPM from tap intervals) | Global |
+| `Ctrl` + `3` | Toggle Triplet duration modifier | Global |
+| `.` (Period) | Toggle Dotted duration modifier | Global |
+| `Ctrl` / `Cmd` + `Z` | Undo last action | Global |
+| `Ctrl` / `Cmd` + `Y` / `Shift`+`Z` | Redo action | Global |
+| `Up` / `Down` | Adjust playback speed by $\pm 0.05\times$ | Global |
+| `M` | Mute reference audio (solo synth) | Global |
+| `S` | Solo transcript synth | Global |
+| `Ctrl` + `A` | Select all notes in active track | Piano Roll |
+| `Ctrl` + `C` | Copy selected note(s) | Piano Roll |
+| `Ctrl` + `V` | Paste note(s) at current playhead (deselects on paste) | Piano Roll |
+| `Ctrl` + `D` | Duplicate selected note(s) | Piano Roll |
+| `Shift` + Wheel | Step note duration preset (1/64 to 1/1) | Piano Roll |
+
+---
+
+## 8. Export Engines & File Formats
+
+1. **Standard MIDI (.mid SMF Type 1):**
+   - Binary serializer in `src/midi-encoder.js`.
+   - Generates valid `MThd` header chunk, tempo meta-events (`0x51`), time signature meta-events (`0x58`), track chunks `MTrk`, delta-time calculations, and note-on/note-off event pairs.
+
+2. **MusicXML 3.1 (.musicxml / .xml):**
+   - DOM serializer in `src/musicxml-encoder.js`.
+   - Valid score-partwise schema with divisions, key signatures, measure layouts, pitch elements (`step`, `octave`, `alter`), and duration values.
+
+3. **Project Session JSON (.wavescribe.json):**
+   - Serializes tracks, notes, tempo map, loop state, zoom level, editor mode, and project metadata.
+   - Supports safe import with schema validation and error fallback.
+
+4. **Dash-Grid Letter Notes / Tab (.txt):**
+   - Pure JavaScript rhythmic text exporter rendering measures as aligned monospace dash grids (`| C4 - - - | E4 - G4 - |`).
+
+---
+
+## 9. Verification & Testing Methodology
+
+1. **Headless Unit Tests (Node.js 22 Test Runner):**
+   Run all unit tests:
+   ```bash
+   node --test test/*.test.mjs
+   ```
+   Covers:
+   - Audio math and pitch conversions ([test/state.test.mjs](file:///d:/Programing/music-transcriber/test/state.test.mjs)).
+   - Scale theory, swing factor, and text tab export ([test/phase2_theory_rhythm_export.test.mjs](file:///d:/Programing/music-transcriber/test/phase2_theory_rhythm_export.test.mjs)).
+   - Session schema import/export ([test/session-schema.test.mjs](file:///d:/Programing/music-transcriber/test/session-schema.test.mjs)).
+   - MIDI SMF binary encoding ([test/midi-encoder.test.mjs](file:///d:/Programing/music-transcriber/test/midi-encoder.test.mjs)).
+   - MusicXML document serialization ([test/musicxml-encoder.test.mjs](file:///d:/Programing/music-transcriber/test/musicxml-encoder.test.mjs)).
+   - UX improvements, BPM scaling, Beat 1 alignment, and note deselection ([test/ux_improvements.test.mjs](file:///d:/Programing/music-transcriber/test/ux_improvements.test.mjs)).
+
+2. **Automated End-to-End Browser Tests:**
+   Run headless Puppeteer test suites:
+   ```bash
+   node test/e2e_simple_mode.mjs
+   node test/e2e_home_button.mjs
+   node test/e2e_phase6_piano_roll.mjs
+   ```
+
+3. **Visual Alignment Verification:**
+   - Check playhead coordinates across Waveform and Piano Roll:
+     $$\Delta X = |X_{\text{waveform playhead}} - X_{\text{piano roll playhead}}| < 1.1\text{px}$$
+   - Confirm gutter visibility toggling when switching between Simple mode and Piano Roll mode.

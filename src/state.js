@@ -150,6 +150,101 @@ export function quantizeTime(timeSeconds, bpm, snapDivision, gridOffset = 0, swi
   return Math.max(0, Math.round((snappedRel + offset) * 10000) / 10000);
 }
 
+/**
+ * Calculates the home rewind position in seconds.
+ * Returns Line A (loop.start) if loop is set and enabled, otherwise beat start line (gridOffset, defaulting to 0).
+ * @param {Object} state - The application state object
+ * @returns {number} Target time in seconds
+ */
+export function calculateHomePosition(state) {
+  if (!state) return 0;
+  const loop = state.playback && state.playback.loop;
+  if (loop && loop.enabled && typeof loop.start === 'number' && loop.start >= 0) {
+    return loop.start;
+  }
+  const gridOffset = (state.tempo && typeof state.tempo.gridOffset === 'number') ? state.tempo.gridOffset : 0;
+  return Math.max(0, gridOffset);
+}
+
+/**
+ * Calculates the horizontal scrollLeft target to ensure the cursor is clearly visible in the view area.
+ * Keeps cursor with comfortable margin (~15-20% from left edge) if zoomed in.
+ * @param {number} timeSeconds - Target playhead time
+ * @param {number} durationSeconds - Total audio duration
+ * @param {number} trackWidthPx - Full rendered track width in pixels
+ * @param {number} viewportWidthPx - Visible viewport width in pixels
+ * @returns {number} Target scrollLeft clamped within valid bounds [0, maxScroll]
+ */
+export function calculateHomeViewportScroll(timeSeconds, durationSeconds, trackWidthPx, viewportWidthPx) {
+  if (!durationSeconds || durationSeconds <= 0 || !trackWidthPx || !viewportWidthPx) return 0;
+  if (trackWidthPx <= viewportWidthPx) return 0;
+
+  const clampedTime = Math.max(0, Math.min(durationSeconds, timeSeconds));
+  const playheadPx = (clampedTime / durationSeconds) * trackWidthPx;
+
+  let targetScroll = 0;
+  if (playheadPx > viewportWidthPx * 0.15) {
+    targetScroll = Math.max(0, playheadPx - (viewportWidthPx * 0.2));
+  }
+
+  const maxScroll = Math.max(0, trackWidthPx - viewportWidthPx);
+  return Math.min(maxScroll, Math.max(0, targetScroll));
+}
+
+// --- Musical Durations & Note Name Formatter ---
+
+export const MUSICAL_NOTE_DURATIONS = [
+  { beats: 4.0,       name: '1/1',    label: 'Whole' },
+  { beats: 3.0,       name: '1/2.',   label: 'Dotted Half' },
+  { beats: 2.0,       name: '1/2',    label: 'Half' },
+  { beats: 1.5,       name: '1/4.',   label: 'Dotted Quarter' },
+  { beats: 4.0 / 3.0, name: '1/2T',   label: 'Half Triplet' },
+  { beats: 1.0,       name: '1/4',    label: 'Quarter' },
+  { beats: 0.75,      name: '1/8.',   label: 'Dotted 8th' },
+  { beats: 2.0 / 3.0, name: '1/4T',   label: 'Quarter Triplet' },
+  { beats: 0.5,       name: '1/8',    label: '8th' },
+  { beats: 0.375,     name: '1/16.',  label: 'Dotted 16th' },
+  { beats: 1.0 / 3.0, name: '1/8T',   label: '8th Triplet' },
+  { beats: 0.25,      name: '1/16',   label: '16th' },
+  { beats: 0.1875,    name: '1/32.',  label: 'Dotted 32nd' },
+  { beats: 1.0 / 6.0, name: '1/16T',  label: '16th Triplet' },
+  { beats: 0.125,     name: '1/32',   label: '32nd' },
+  { beats: 1.0 / 12.0,name: '1/32T',  label: '32nd Triplet' },
+  { beats: 0.0625,    name: '1/64',   label: '64th' }
+];
+
+/**
+ * Converts a duration in seconds into standard musical note name (e.g. 1/4, 1/8, 1/16, 1/4., 1/8T).
+ * @param {number} durationSeconds - Duration in seconds
+ * @param {number} [bpm=120] - Tempo in BPM
+ * @returns {string} Musical note name (e.g. "1/4", "1/8", "1/2", "1/16")
+ */
+export function durationToNoteName(durationSeconds, bpm = 120) {
+  if (typeof durationSeconds !== 'number' || durationSeconds <= 0) return '1/4';
+  const beatSec = (bpm > 0) ? (60 / bpm) : 0.5;
+  const beats = durationSeconds / beatSec;
+
+  if (beats >= 3.8) {
+    const bars = Math.round(beats / 4);
+    if (bars > 1 && Math.abs(beats - (bars * 4)) < 0.25) {
+      return `${bars} bars`;
+    }
+  }
+
+  let best = MUSICAL_NOTE_DURATIONS[5]; // Default 1/4
+  let minDiff = Infinity;
+
+  for (const item of MUSICAL_NOTE_DURATIONS) {
+    const diff = Math.abs(beats - item.beats);
+    if (diff < minDiff) {
+      minDiff = diff;
+      best = item;
+    }
+  }
+
+  return best.name;
+}
+
 // --- Music Theory & Scale Engine (Task 2.2) ---
 
 export const MAJOR_SCALES = {
@@ -582,6 +677,10 @@ export class Store {
     this.notify('playback:time', clampedTime);
   }
 
+  getHomePosition() {
+    return calculateHomePosition(this.state);
+  }
+
   setIsPlaying(isPlaying) {
     this.state.playback.isPlaying = !!isPlaying;
     this.notify('playback:state', this.state.playback.isPlaying);
@@ -667,10 +766,25 @@ export class Store {
 
   // --- Tempo & Grid Actions ---
 
-  setBpm(bpm) {
+  setBpm(bpm, updateDurations = true) {
     const clampedBpm = Math.max(20, Math.min(320, Math.round(bpm)));
+    const oldBpm = this.state.tempo.bpm || 120;
+    if (clampedBpm === oldBpm) return;
+
     this.snapshotForHistory('Change BPM');
     this.state.tempo.bpm = clampedBpm;
+
+    if (updateDurations && oldBpm > 0 && Array.isArray(this.state.notes) && this.state.notes.length > 0) {
+      const scaleFactor = oldBpm / clampedBpm;
+      this.state.notes.forEach(note => {
+        if (typeof note.duration === 'number' && note.duration > 0) {
+          note.duration = Math.max(0.01, Math.round(note.duration * scaleFactor * 10000) / 10000);
+        }
+      });
+      this.notify('notes:changed', this.state.notes);
+      this.eventBus.emit('notes:changed', this.state.notes);
+    }
+
     this.notify('tempo:bpm', clampedBpm);
     this.eventBus.emit('tempo:bpm', clampedBpm);
   }
@@ -804,7 +918,11 @@ export class Store {
     // Keep notes sorted by startTime
     this.state.notes.sort((a, b) => a.startTime - b.startTime);
 
-    this.state.view.selectedNoteId = note.id;
+    if (options.select === false || (this.state.view.editorMode === 'simple' && options.select !== true)) {
+      this.state.view.selectedNoteId = null;
+    } else {
+      this.state.view.selectedNoteId = note.id;
+    }
     this.notify('notes:add', note);
     this.eventBus.emit('notes:changed', this.state.notes);
     return note;

@@ -575,13 +575,66 @@
     }
 
     /* --- Waveform Section --- */
+    .waveform-viewport-wrapper {
+      display: flex;
+      position: relative;
+      width: 100%;
+      height: 180px;
+      overflow: hidden;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+    }
+    .waveform-gutter {
+      width: 68px;
+      height: 100%;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      z-index: 5;
+      user-select: none;
+      pointer-events: none;
+    }
+    .waveform-gutter-ruler-spacer {
+      height: 24px;
+      width: 100%;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+    .waveform-gutter-label {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      letter-spacing: 0.12em;
+    }
     .waveform-container {
       position: relative;
-      height: 180px;
+      height: 100%;
+      flex: 1;
+      min-width: 0;
       background: #0d0d10;
       overflow-x: auto;
       overflow-y: hidden;
       cursor: crosshair;
+    }
+    .waveform-viewport-wrapper.has-gutter .waveform-container {
+      padding-right: 6px;
     }
     .waveform-track {
       position: relative;
@@ -911,9 +964,23 @@
       padding: 12px 16px;
       background: var(--bg-surface);
       display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .simple-entry-row-top {
+      display: flex;
+      justify-content: space-between;
       align-items: center;
       gap: 16px;
+      width: 100%;
       flex-wrap: wrap;
+    }
+    .simple-entry-row-bottom {
+      display: flex;
+      align-items: flex-end;
+      gap: 16px;
+      flex-wrap: wrap;
+      width: 100%;
     }
     .pitch-display-box {
       display: flex;
@@ -1028,14 +1095,12 @@
       gap: 4px;
     }
     .duration-key-btn, .duration-modifier-btn {
-      padding: 3px 6px 4px 6px;
+      padding: 0 8px;
       min-width: 36px;
-      height: 40px;
+      height: 36px;
       display: inline-flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 0px;
       font-family: var(--font-mono);
       cursor: pointer;
       user-select: none;
@@ -1043,7 +1108,7 @@
       position: relative;
     }
     .duration-modifier-btn {
-      min-width: 44px;
+      min-width: 42px;
       background: rgba(255, 255, 255, 0.04);
       border-color: rgba(255, 255, 255, 0.12);
     }
@@ -1053,40 +1118,26 @@
     }
     .duration-key-btn .noto-music-glyph, .duration-modifier-btn .noto-music-glyph {
       font-family: var(--font-music);
-      font-size: 1.35rem;
+      font-size: 1.45rem;
       line-height: 1;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      height: 20px;
       pointer-events: none;
-    }
-    .duration-key-btn .duration-sub, .duration-modifier-btn .duration-sub {
-      font-size: 0.56rem;
-      font-family: var(--font-mono);
-      line-height: 1;
-      color: var(--text-muted);
-      letter-spacing: -0.02em;
-      pointer-events: none;
-      margin-top: 2px;
-    }
-    .duration-key-btn.btn-active .duration-sub, .duration-modifier-btn.btn-active .duration-sub {
-      color: #052e16 !important;
-      font-weight: 700 !important;
     }
     .duration-key-btn .duration-sup, .duration-modifier-btn .duration-sup {
-      font-size: 0.58rem;
+      font-size: 0.65rem;
       font-family: var(--font-sans);
       font-weight: 700;
       vertical-align: super;
-      margin-left: 1px;
+      margin-left: 2px;
       line-height: 1;
     }
     .duration-key-btn .duration-dot, .duration-modifier-btn .duration-dot {
-      font-size: 0.68rem;
+      font-size: 0.8rem;
       font-family: var(--font-mono);
       font-weight: 800;
-      margin-left: 1px;
+      margin-left: 2px;
       line-height: 1;
     }
     .insert-action-group {
@@ -1516,7 +1567,7 @@
       <button class="btn btn-icon btn-primary" id="btn-play-pause" title="Play / Pause (Space)">
         <span id="icon-play-pause">▶</span>
       </button>
-      <button class="btn btn-icon" id="btn-stop-rewind" title="Return to Start (Home)">⏮</button>
+      <button class="btn btn-icon" id="btn-stop-rewind" title="Return to Beat Start / Loop A (Home)">⏮</button>
       <button class="btn btn-icon btn-sm" id="btn-skip-back-5" title="Skip -5s (Shift+Left)">-5s</button>
       <button class="btn btn-icon btn-sm" id="btn-skip-back-1" title="Skip -1s (Left)">-1s</button>
       <button class="btn btn-icon btn-sm" id="btn-skip-forward-1" title="Skip +1s (Right)">+1s</button>
@@ -1660,23 +1711,31 @@
         </div>
       </div>
 
-      <div class="waveform-container" id="waveform-viewport">
-        <div class="waveform-track" id="waveform-track">
-          <!-- Interactive Canvases -->
-          <canvas class="time-ruler-canvas" id="canvas-time-ruler"></canvas>
-          <canvas class="waveform-canvas" id="canvas-waveform"></canvas>
-          <canvas class="loop-overlay-canvas" id="canvas-loop-overlay"></canvas>
-          <div class="playhead-line" id="waveform-playhead" style="left: 0;">
-            <div class="playhead-head"></div>
-          </div>
+      <div class="waveform-viewport-wrapper" id="waveform-viewport-wrapper">
+        <!-- Waveform Overview gutter spacer to sync with Piano Roll keys gutter -->
+        <div class="waveform-gutter" id="waveform-gutter">
+          <div class="waveform-gutter-ruler-spacer">TIME</div>
+          <div class="waveform-gutter-label">OVERVIEW</div>
         </div>
 
-        <!-- Drag & Drop overlay when empty -->
-        <div class="dropzone-overlay" id="audio-dropzone">
-          <div class="dropzone-icon">♫</div>
-          <div class="dropzone-title">Drag &amp; drop your audio track here</div>
-          <div class="dropzone-subtitle">Supports MP3, WAV, FLAC, M4A, OGG • Sample-accurate client-side decoding</div>
-          <button class="btn btn-primary" id="btn-dropzone-browse">Browse Audio File</button>
+        <div class="waveform-container" id="waveform-viewport">
+          <div class="waveform-track" id="waveform-track">
+            <!-- Interactive Canvases -->
+            <canvas class="time-ruler-canvas" id="canvas-time-ruler"></canvas>
+            <canvas class="waveform-canvas" id="canvas-waveform"></canvas>
+            <canvas class="loop-overlay-canvas" id="canvas-loop-overlay"></canvas>
+            <div class="playhead-line" id="waveform-playhead" style="left: 0;">
+              <div class="playhead-head"></div>
+            </div>
+          </div>
+
+          <!-- Drag & Drop overlay when empty -->
+          <div class="dropzone-overlay" id="audio-dropzone">
+            <div class="dropzone-icon">♫</div>
+            <div class="dropzone-title">Drag &amp; drop your audio track here</div>
+            <div class="dropzone-subtitle">Supports MP3, WAV, FLAC, M4A, OGG • Sample-accurate client-side decoding</div>
+            <button class="btn btn-primary" id="btn-dropzone-browse">Browse Audio File</button>
+          </div>
         </div>
       </div>
 
@@ -1698,127 +1757,122 @@
         </div>
         <div class="transport-group">
           <span class="mono" id="simple-note-count" style="font-size: 0.78rem; color: var(--text-muted);">0 Notes</span>
-          <button class="btn btn-sm" id="btn-clear-track-notes" title="Clear all transcribed notes on current track">Clear Notes</button>
         </div>
       </div>
 
       <!-- Monophonic Note Entry Bar -->
       <div class="simple-entry-bar">
-        <!-- Selected Pitch Preview & Direct Input -->
-        <div class="pitch-display-box">
-          <span class="control-label">Current Pitch</span>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <input type="text" id="input-simple-pitch" value="C4" class="mono pitch-text-input" maxlength="4" title="Type pitch name (e.g. C4, F#3, Bb4) and press Enter">
-            <button class="btn btn-sm btn-icon" id="btn-audition-pitch" title="Audition Pitch (Space while focused)">🔊</button>
+        <!-- First Line: Scale Selector [ ] and Action Buttons -->
+        <div class="simple-entry-row-top">
+          <!-- Major Scale Key Selector -->
+          <div class="scale-selector-box" style="display: flex; align-items: center; gap: 8px;">
+            <span class="control-label" style="white-space: nowrap;">Major Scale</span>
+            <select class="control-select" id="select-scale" title="Filter &amp; highlight by Major Scale Key" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: #fff; padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600;">
+              <option value="none">Chromatic / None</option>
+              <option value="C">C Major</option>
+              <option value="G">G Major (1#)</option>
+              <option value="D">D Major (2#)</option>
+              <option value="A">A Major (3#)</option>
+              <option value="E">E Major (4#)</option>
+              <option value="B">B Major (5#)</option>
+              <option value="F">F Major (1b)</option>
+              <option value="Bb">Bb Major (2b)</option>
+              <option value="Eb">Eb Major (3b)</option>
+              <option value="Ab">Ab Major (4b)</option>
+              <option value="Db">Db Major (5b)</option>
+              <option value="Gb">Gb Major (6b)</option>
+            </select>
+          </div>
+
+          <!-- Buttons: Insert, Remove, Auto-Advance -->
+          <div class="insert-action-group" style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn btn-primary btn-sm" id="btn-simple-insert-note" title="Insert Note at Playhead (N or Enter)">
+              <span>+ Insert Note (N)</span>
+            </button>
+            <button class="btn btn-rose-active btn-sm" id="btn-simple-delete-note" title="Remove Selected Note (Delete)">
+              <span>🗑 Remove Note (Del)</span>
+            </button>
+            <label class="auto-advance-label" title="Automatically advance playhead by duration after inserting" style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+              <input type="checkbox" id="chk-auto-advance" checked>
+              <span>Auto-advance</span>
+            </label>
           </div>
         </div>
 
-        <!-- Major Scale Key Selector (Task 2.2.1) -->
-        <div class="scale-selector-box" style="display: flex; flex-direction: column; gap: 4px;">
-          <span class="control-label">Major Scale</span>
-          <select class="control-select" id="select-scale" title="Filter &amp; highlight by Major Scale Key (Task 2.2)" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: #fff; padding: 4px 6px; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 600;">
-            <option value="none">Chromatic / None</option>
-            <option value="C">C Major</option>
-            <option value="G">G Major (1#)</option>
-            <option value="D">D Major (2#)</option>
-            <option value="A">A Major (3#)</option>
-            <option value="E">E Major (4#)</option>
-            <option value="B">B Major (5#)</option>
-            <option value="F">F Major (1b)</option>
-            <option value="Bb">Bb Major (2b)</option>
-            <option value="Eb">Eb Major (3b)</option>
-            <option value="Ab">Ab Major (4b)</option>
-            <option value="Db">Db Major (5b)</option>
-            <option value="Gb">Gb Major (6b)</option>
-          </select>
-        </div>
-
-        <!-- 12 Pitch Buttons -->
-        <div class="pitch-buttons-group">
-          <span class="control-label">Pitch</span>
-          <div class="pitch-keys-row">
-            <button class="btn btn-sm pitch-key-btn btn-active" data-pitch="C">C</button>
-            <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="C#">C#</button>
-            <button class="btn btn-sm pitch-key-btn" data-pitch="D">D</button>
-            <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="D#">D#</button>
-            <button class="btn btn-sm pitch-key-btn" data-pitch="E">E</button>
-            <button class="btn btn-sm pitch-key-btn" data-pitch="F">F</button>
-            <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="F#">F#</button>
-            <button class="btn btn-sm pitch-key-btn" data-pitch="G">G</button>
-            <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="G#">G#</button>
-            <button class="btn btn-sm pitch-key-btn" data-pitch="A">A</button>
-            <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="A#">A#</button>
-            <button class="btn btn-sm pitch-key-btn" data-pitch="B">B</button>
+        <!-- Second Line: Duration/modifier, Pitch, Current pitch -->
+        <div class="simple-entry-row-bottom">
+          <!-- Duration Presets & Modifiers -->
+          <div class="duration-buttons-group">
+            <span class="control-label">Duration &amp; Modifiers</span>
+            <div class="duration-keys-row">
+              <button class="btn btn-sm duration-key-btn" data-duration="2.0" data-preset="1/1" title="Whole Note (1/1)">
+                <span class="noto-music-glyph">&#x1D15D;</span>
+              </button>
+              <button class="btn btn-sm duration-key-btn" data-duration="1.0" data-preset="1/2" title="Half Note (1/2)">
+                <span class="noto-music-glyph">&#x1D15E;</span>
+              </button>
+              <button class="btn btn-sm duration-key-btn btn-active" data-duration="0.5" data-preset="1/4" title="Quarter Note (1/4)">
+                <span class="noto-music-glyph">&#x1D15F;</span>
+              </button>
+              <button class="btn btn-sm duration-key-btn" data-duration="0.25" data-preset="1/8" title="Eighth Note (1/8)">
+                <span class="noto-music-glyph">&#x1D160;</span>
+              </button>
+              <button class="btn btn-sm duration-key-btn" data-duration="0.125" data-preset="1/16" title="Sixteenth Note (1/16)">
+                <span class="noto-music-glyph">&#x1D161;</span>
+              </button>
+              <button class="btn btn-sm duration-key-btn" data-duration="0.0625" data-preset="1/32" title="Thirty-Second Note (1/32)">
+                <span class="noto-music-glyph">&#x1D162;</span>
+              </button>
+              <div style="width: 1px; height: 22px; background: var(--border-subtle); margin: 0 4px;"></div>
+              <button class="btn btn-sm duration-modifier-btn" id="btn-toggle-dotted" title="Toggle Dotted Note (Hotkey: .)">
+                <span class="noto-music-glyph" id="glyph-toggle-dotted">&#x1D15F;<span class="duration-dot">·</span></span>
+              </button>
+              <button class="btn btn-sm duration-modifier-btn" id="btn-toggle-triplet" title="Toggle Triplet Tuplet (Hotkey: Ctrl+3)">
+                <span class="noto-music-glyph" id="glyph-toggle-triplet">&#x1D15F;<sup class="duration-sup">3</sup></span>
+              </button>
+            </div>
           </div>
-        </div>
 
-        <!-- Octave Buttons -->
-        <div class="octave-buttons-group">
-          <span class="control-label">Octave</span>
-          <div class="octave-keys-row">
-            <button class="btn btn-sm octave-key-btn" data-octave="2">2</button>
-            <button class="btn btn-sm octave-key-btn" data-octave="3">3</button>
-            <button class="btn btn-sm octave-key-btn btn-active" data-octave="4">4</button>
-            <button class="btn btn-sm octave-key-btn" data-octave="5">5</button>
-            <button class="btn btn-sm octave-key-btn" data-octave="6">6</button>
-          </div>
-        </div>
+          <!-- Pitch (12 Chromatic Keys + Octaves) -->
+          <div class="pitch-and-octave-group" style="display: flex; gap: 10px; align-items: flex-end;">
+            <div class="pitch-buttons-group">
+              <span class="control-label">Pitch</span>
+              <div class="pitch-keys-row">
+                <button class="btn btn-sm pitch-key-btn btn-active" data-pitch="C">C</button>
+                <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="C#">C#</button>
+                <button class="btn btn-sm pitch-key-btn" data-pitch="D">D</button>
+                <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="D#">D#</button>
+                <button class="btn btn-sm pitch-key-btn" data-pitch="E">E</button>
+                <button class="btn btn-sm pitch-key-btn" data-pitch="F">F</button>
+                <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="F#">F#</button>
+                <button class="btn btn-sm pitch-key-btn" data-pitch="G">G</button>
+                <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="G#">G#</button>
+                <button class="btn btn-sm pitch-key-btn" data-pitch="A">A</button>
+                <button class="btn btn-sm pitch-key-btn is-accidental" data-pitch="A#">A#</button>
+                <button class="btn btn-sm pitch-key-btn" data-pitch="B">B</button>
+              </div>
+            </div>
 
-        <!-- Duration Presets & Modifiers (MuseScore style Dotted & Triplet Toggles) -->
-        <div class="duration-buttons-group" style="min-width: 280px;">
-          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px;">
-            <span class="control-label">Duration</span>
-            <span style="font-size: 0.66rem; color: var(--text-muted);">Standard • Modifiers (Dot / Triplet)</span>
+            <div class="octave-buttons-group">
+              <span class="control-label">Octave</span>
+              <div class="octave-keys-row">
+                <button class="btn btn-sm octave-key-btn" data-octave="2">2</button>
+                <button class="btn btn-sm octave-key-btn" data-octave="3">3</button>
+                <button class="btn btn-sm octave-key-btn btn-active" data-octave="4">4</button>
+                <button class="btn btn-sm octave-key-btn" data-octave="5">5</button>
+                <button class="btn btn-sm octave-key-btn" data-octave="6">6</button>
+              </div>
+            </div>
           </div>
-          <div class="duration-keys-row">
-            <button class="btn btn-sm duration-key-btn" data-duration="2.0" data-preset="1/1" title="Whole Note (1/1)">
-              <span class="noto-music-glyph">&#x1D15D;</span>
-              <span class="duration-sub">1/1</span>
-            </button>
-            <button class="btn btn-sm duration-key-btn" data-duration="1.0" data-preset="1/2" title="Half Note (1/2)">
-              <span class="noto-music-glyph">&#x1D15E;</span>
-              <span class="duration-sub">1/2</span>
-            </button>
-            <button class="btn btn-sm duration-key-btn btn-active" data-duration="0.5" data-preset="1/4" title="Quarter Note (1/4)">
-              <span class="noto-music-glyph">&#x1D15F;</span>
-              <span class="duration-sub">1/4</span>
-            </button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.25" data-preset="1/8" title="Eighth Note (1/8)">
-              <span class="noto-music-glyph">&#x1D160;</span>
-              <span class="duration-sub">1/8</span>
-            </button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.125" data-preset="1/16" title="Sixteenth Note (1/16)">
-              <span class="noto-music-glyph">&#x1D161;</span>
-              <span class="duration-sub">1/16</span>
-            </button>
-            <button class="btn btn-sm duration-key-btn" data-duration="0.0625" data-preset="1/32" title="Thirty-Second Note (1/32)">
-              <span class="noto-music-glyph">&#x1D162;</span>
-              <span class="duration-sub">1/32</span>
-            </button>
-            <div style="width: 1px; height: 22px; background: var(--border-subtle); margin: 0 3px;"></div>
-            <button class="btn btn-sm duration-modifier-btn" id="btn-toggle-dotted" title="Toggle Dotted Note (Hotkey: .)">
-              <span class="noto-music-glyph" id="glyph-toggle-dotted">&#x1D15F;<span class="duration-dot">·</span></span>
-              <span class="duration-sub">Dot (.)</span>
-            </button>
-            <button class="btn btn-sm duration-modifier-btn" id="btn-toggle-triplet" title="Toggle Triplet Tuplet (Hotkey: 3 or T)">
-              <span class="noto-music-glyph" id="glyph-toggle-triplet">&#x1D15F;<sup class="duration-sup">3</sup></span>
-              <span class="duration-sub">Triplet (3)</span>
-            </button>
-          </div>
-        </div>
 
-        <!-- Insert Action vs. Update Selected (Task 2.1.2) -->
-        <div class="insert-action-group">
-          <button class="btn btn-primary" id="btn-simple-insert-note" title="Insert Note at Playhead (N or Enter)">
-            <span>+ Insert Note (N)</span>
-          </button>
-          <button class="btn btn-secondary" id="btn-simple-update-note" title="Update Selected Note with Active Pitch &amp; Duration (U)">
-            <span>✎ Update Selected (U)</span>
-          </button>
-          <label class="auto-advance-label" title="Automatically advance playhead by duration after inserting">
-            <input type="checkbox" id="chk-auto-advance" checked>
-            <span>Auto-advance</span>
-          </label>
+          <!-- Current Pitch Preview & Direct Input -->
+          <div class="pitch-display-box">
+            <span class="control-label">Current Pitch</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <input type="text" id="input-simple-pitch" value="C4" class="mono pitch-text-input" maxlength="4" title="Type pitch name (e.g. C4, F#3, Bb4) and press Enter">
+              <button class="btn btn-sm btn-icon" id="btn-audition-pitch" title="Audition Pitch (Space while focused)">🔊</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -1903,7 +1957,7 @@
           <tr><td><kbd>Space</kbd></td><td>Play / Pause playback</td></tr>
           <tr><td><kbd>Left</kbd> / <kbd>Right</kbd></td><td>Skip backward / forward by 1.0 second</td></tr>
           <tr><td><kbd>Shift</kbd> + <kbd>Left</kbd> / <kbd>Right</kbd></td><td>Skip backward / forward by 5.0 seconds</td></tr>
-          <tr><td><kbd>Home</kbd></td><td>Rewind to beginning (0:00.000)</td></tr>
+          <tr><td><kbd>Home</kbd></td><td>Rewind to Beat Start line (or Line A if loop is set)</td></tr>
           <tr><td><kbd>Up</kbd> / <kbd>Down</kbd></td><td>Adjust playback speed by ±5% (when no note selected)</td></tr>
 
           <tr class="shortcut-section"><td colspan="2">A-B Looping</td></tr>
@@ -1914,9 +1968,10 @@
 
           <tr class="shortcut-section"><td colspan="2">Transcription &amp; Note Entry</td></tr>
           <tr><td><kbd>N</kbd> or <kbd>Enter</kbd></td><td>Insert single note at current playhead</td></tr>
-          <tr><td><kbd>U</kbd></td><td>Update selected note with active pitch &amp; duration</td></tr>
-          <tr><td><kbd>C</kbd></td><td>Insert chord marker at current playhead</td></tr>
           <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete selected transcribed note(s)</td></tr>
+          <tr><td><kbd>.</kbd></td><td>Toggle Dotted Note modifier</td></tr>
+          <tr><td><kbd>Ctrl</kbd> + <kbd>3</kbd></td><td>Toggle Triplet Tuplet modifier</td></tr>
+          <tr><td><kbd>C</kbd></td><td>Insert chord marker at current playhead</td></tr>
           <tr><td><kbd>Up</kbd> / <kbd>Down</kbd></td><td>Transpose selected note by ±1 semitone (in Piano Roll)</td></tr>
 
           <tr class="shortcut-section"><td colspan="2">Clipboard &amp; Project Workflow</td></tr>
@@ -1995,7 +2050,11 @@
       isNoteInScale,
       getDiatonicStep,
       midiToScalePitchName,
-      exportLetterNotes
+      exportLetterNotes,
+      calculateHomePosition,
+      calculateHomeViewportScroll,
+      durationToNoteName,
+      MUSICAL_NOTE_DURATIONS
     } from './src/state.js';
 
     import { encodeMidi } from './src/midi-encoder.js';
@@ -2095,6 +2154,8 @@
       inputGridOffset: document.getElementById('input-grid-offset'),
 
       // Waveform Viewport
+      waveformViewportWrapper: document.getElementById('waveform-viewport-wrapper'),
+      waveformGutter: document.getElementById('waveform-gutter'),
       waveformViewport: document.getElementById('waveform-viewport'),
       waveformTrack: document.getElementById('waveform-track'),
       canvasTimeRuler: document.getElementById('canvas-time-ruler'),
@@ -2135,6 +2196,7 @@
       btnToggleDotted: document.getElementById('btn-toggle-dotted'),
       btnToggleTriplet: document.getElementById('btn-toggle-triplet'),
       btnSimpleInsertNote: document.getElementById('btn-simple-insert-note'),
+      btnSimpleDeleteNote: document.getElementById('btn-simple-delete-note'),
       btnSimpleUpdateNote: document.getElementById('btn-simple-update-note'),
       chkAutoAdvance: document.getElementById('chk-auto-advance'),
 
@@ -3098,25 +3160,118 @@
         }
       }
 
-      // 2. Draw vertical time grid lines (Measures, beats & subdivisions)
+      // 2. Draw vertical time grid lines (Measures, beats & subdivisions aligned to Beat 1 / gridOffset)
       const bpm = state.tempo.bpm || 120;
       const timeSig = state.tempo.timeSignature || [4, 4];
       const beatsPerMeasure = timeSig[0] || 4;
-      const beatDuration = 60 / bpm;
-      const totalBeats = Math.ceil(duration / beatDuration);
+      const beatSec = 60 / bpm;
+      const measureSec = beatSec * beatsPerMeasure;
+      const gridOffset = state.tempo.gridOffset || 0;
+      const snap = state.tempo.snap || '1/16';
 
-      for (let b = 0; b <= totalBeats; b++) {
-        const beatTime = b * beatDuration;
-        if (beatTime > duration) break;
-        const x = (beatTime / duration) * width;
-        const isMeasure = (b % beatsPerMeasure === 0);
+      let subDivs = 0;
+      if (snap === '1/8') subDivs = 2;
+      else if (snap === '1/16') subDivs = 4;
+      else if (snap === '1/8T') subDivs = 3;
 
-        ctx.strokeStyle = isMeasure ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.04)';
-        ctx.lineWidth = isMeasure ? 1.5 : 1;
+      const drawVLine = (t, color, lw, dash = []) => {
+        if (t < 0 || t > duration) return;
+        const x = (t / duration) * width;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lw;
+        if (dash.length > 0) ctx.setLineDash(dash);
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
         ctx.stroke();
+        ctx.restore();
+      };
+
+      // Faint Sub-beat subdivision lines
+      if (subDivs > 1) {
+        const subSec = beatSec / subDivs;
+        for (let t = gridOffset; t <= duration; t += subSec) {
+          drawVLine(t, 'rgba(255, 255, 255, 0.05)', 1);
+        }
+        for (let t = gridOffset - subSec; t >= 0; t -= subSec) {
+          drawVLine(t, 'rgba(255, 255, 255, 0.05)', 1);
+        }
+      }
+
+      // Forward from gridOffset: Measures & Intermediate Beats
+      for (let mTime = gridOffset, mIdx = 1; mTime <= duration; mTime += measureSec, mIdx++) {
+        // High-contrast Measure Bar Line
+        const isBeat1 = (mIdx === 1);
+        const barColor = isBeat1 ? 'rgba(245, 158, 11, 0.95)' : 'rgba(255, 255, 255, 0.45)';
+        drawVLine(mTime, barColor, isBeat1 ? 2.0 : 1.5);
+
+        // Measure header label at top
+        const mx = (mTime / duration) * width;
+        ctx.fillStyle = isBeat1 ? '#f59e0b' : 'rgba(255, 255, 255, 0.75)';
+        ctx.font = 'bold 9px JetBrains Mono, monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`M${mIdx}`, mx + 4, 3);
+
+        // Intermediate beats
+        for (let b = 1; b < beatsPerMeasure; b++) {
+          const bTime = mTime + (b * beatSec);
+          drawVLine(bTime, 'rgba(255, 255, 255, 0.18)', 1.0);
+        }
+      }
+
+      // Backward from gridOffset: Pre-roll / pickup measures
+      for (let mTime = gridOffset - measureSec, mIdx = 0; mTime >= -measureSec; mTime -= measureSec, mIdx--) {
+        if (mTime >= 0) {
+          drawVLine(mTime, 'rgba(255, 255, 255, 0.35)', 1.5);
+          const mx = (mTime / duration) * width;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+          ctx.font = 'bold 9px JetBrains Mono, monospace';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          ctx.fillText(`M${mIdx}`, mx + 4, 3);
+        }
+        for (let b = 1; b < beatsPerMeasure; b++) {
+          const bTime = mTime + (b * beatSec);
+          if (bTime >= 0 && bTime <= duration) {
+            drawVLine(bTime, 'rgba(255, 255, 255, 0.14)', 1.0);
+          }
+        }
+      }
+
+      // Dedicated Beat 1 Downbeat Line Marker (Task requirement: beat 1 line in piano roll)
+      if (gridOffset >= 0 && gridOffset <= duration && duration > 0) {
+        const beat1X = (gridOffset / duration) * width;
+        ctx.save();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = 'rgba(245, 158, 11, 0.6)';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.moveTo(beat1X, 0);
+        ctx.lineTo(beat1X, height);
+        ctx.stroke();
+
+        // 1.1 Downbeat Badge at top of piano roll
+        const flagW = 28;
+        const flagH = 16;
+        ctx.fillStyle = '#f59e0b';
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(beat1X - flagW / 2, 0, flagW, flagH, [0, 0, 4, 4]);
+        } else {
+          ctx.rect(beat1X - flagW / 2, 0, flagW, flagH);
+        }
+        ctx.fill();
+
+        ctx.fillStyle = '#09090b';
+        ctx.font = 'bold 9px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('1.1', beat1X, flagH / 2);
+        ctx.restore();
       }
 
       // 3. Draw Loop Range Overlay if loop is enabled
@@ -3183,10 +3338,80 @@
           ctx.font = 'bold 9px monospace';
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
-          const text = note.chordLabel ? `${note.pitchName} [${note.chordLabel}]` : note.pitchName;
+          const durName = durationToNoteName(note.duration, bpm);
+          let text = note.chordLabel ? `${note.pitchName} [${note.chordLabel}]` : note.pitchName;
+          if (noteW > 48) {
+            text += ` (${durName})`;
+          }
           ctx.fillText(text, x + 5, y + 1 + (noteH / 2), noteW - 10);
         }
       });
+
+      // 5. Render Hover Preview Ghost Note (if Draw tool is active and hovering empty grid)
+      if (pianoRollHoverPreview && currentPianoRollTool === 'draw' && !pianoRollDragState) {
+        const rowIdx = PIANO_MAX_MIDI - pianoRollHoverPreview.midi;
+        const py = rowIdx * PIANO_ROW_HEIGHT;
+        const px = (pianoRollHoverPreview.startTime / duration) * width;
+        const pw = Math.max(8, (pianoRollHoverPreview.duration / duration) * width);
+        const ph = PIANO_ROW_HEIGHT - 2;
+
+        const track = state.tracks.find(t => t.id === state.view.activeTrackId) || state.tracks[0];
+        const trackColor = track ? track.color : '#38bdf8';
+
+        ctx.save();
+        ctx.fillStyle = `${trackColor}35`;
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(px, py + 1, pw, ph, 3);
+        } else {
+          ctx.rect(px, py + 1, pw, ph);
+        }
+        ctx.fill();
+
+        ctx.strokeStyle = trackColor;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const pName = midiToNoteName(pianoRollHoverPreview.midi);
+        const durName = durationToNoteName(pianoRollHoverPreview.duration, bpm);
+        const previewLabel = `${pName} (${durName})`;
+
+        if (pw >= 55) {
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px monospace';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(previewLabel, px + 5, py + 1 + (ph / 2), pw - 10);
+        } else {
+          // When ghost note is narrow due to zoom or small duration, draw clean floating badge
+          ctx.font = 'bold 9px monospace';
+          const textW = ctx.measureText(previewLabel).width;
+          const tagW = textW + 8;
+          const tagH = 14;
+          const tagX = Math.max(0, px);
+          const tagY = (py >= tagH + 2) ? (py - tagH - 2) : (py + ph + 3);
+
+          ctx.fillStyle = 'rgba(9, 9, 12, 0.92)';
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(tagX, tagY, tagW, tagH, 3);
+          } else {
+            ctx.rect(tagX, tagY, tagW, tagH);
+          }
+          ctx.fill();
+          ctx.strokeStyle = trackColor;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(previewLabel, tagX + 4, tagY + tagH / 2);
+        }
+        ctx.restore();
+      }
     }
 
     // --- Simple Mode Note State & Ribbon Utilities ---
@@ -3196,6 +3421,18 @@
     let isDotted = false;
     let isTriplet = false;
     let selectedDuration = 0.5;
+    let lastPianoRollDuration = null;
+    let pianoRollHoverPreview = null;
+    let lastHoverAuditionMidi = null;
+
+    function getPianoRollInsertDuration() {
+      if (typeof lastPianoRollDuration === 'number' && lastPianoRollDuration > 0) {
+        return lastPianoRollDuration;
+      }
+      const state = store.getState();
+      const beatSec = 60 / state.tempo.bpm;
+      return Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
+    }
 
     const DURATION_GLYPHS = {
       2.0: '&#x1D15D;',   // Whole
@@ -3348,8 +3585,14 @@
       const state = store.getState();
       const isSimple = state.view.editorMode === 'simple';
 
-      // In Simple Mode: Annotation Track is visible beneath waveform
-      // In Piano Roll Mode: Annotation Track is hidden to maximize vertical space (Task 1.3.3)
+      // In Simple Mode: Annotation Track is visible beneath waveform, waveform gutter is hidden
+      // In Piano Roll Mode: Annotation Track is hidden, waveform gutter aligns with piano keys gutter
+      if (el.waveformGutter) {
+        el.waveformGutter.style.display = isSimple ? 'none' : 'flex';
+      }
+      if (el.waveformViewportWrapper) {
+        el.waveformViewportWrapper.classList.toggle('has-gutter', !isSimple);
+      }
       if (el.annotationViewport) {
         el.annotationViewport.style.display = isSimple ? 'block' : 'none';
       }
@@ -3362,6 +3605,10 @@
 
       if (el.btnModeSimple) el.btnModeSimple.classList.toggle('btn-active', isSimple);
       if (el.btnModePianoroll) el.btnModePianoroll.classList.toggle('btn-active', !isSimple);
+
+      renderTimeRulerGrid();
+      renderWaveform();
+      renderLoopOverlay();
 
       if (!isSimple) {
         if (el.pianoRollGridContent) {
@@ -3424,12 +3671,13 @@
         }
         block.style.left = `${leftPct}%`;
         block.style.width = `${widthPct}%`;
-        block.title = isRest ? `Rest (${formatTimestamp(note.startTime)}, ${note.duration.toFixed(2)}s)` : `${note.pitchName} • ${track ? track.name : ''} (${formatTimestamp(note.startTime)}, ${note.duration.toFixed(2)}s) • Drag to move, handles to resize, scroll to change pitch`;
+        const durName = durationToNoteName(note.duration, state.tempo.bpm);
+        block.title = isRest ? `Rest (${formatTimestamp(note.startTime)}, ${durName})` : `${note.pitchName} • ${track ? track.name : ''} (${formatTimestamp(note.startTime)}, ${durName}) • Drag to move, handles to resize, scroll to change pitch`;
 
         block.innerHTML = `
           <div class="annotation-resize-handle resize-handle-left" title="Drag to adjust start time"></div>
           <span class="annotation-block-pitch" style="${isRest ? '' : `color: ${trackColor};`}">${isRest ? '𝄽 Rest' : note.pitchName}</span>
-          ${note.chordLabel ? `<span class="annotation-block-chord">${note.chordLabel}</span>` : `<span class="annotation-block-chord">${note.duration.toFixed(2)}s</span>`}
+          ${note.chordLabel ? `<span class="annotation-block-chord">${note.chordLabel}</span>` : `<span class="annotation-block-chord">${durName}</span>`}
           <div class="annotation-resize-handle resize-handle-right" title="Drag to adjust duration"></div>
         `;
 
@@ -3761,13 +4009,43 @@
       store.setIsPlaying(willPlay);
     }
 
+    // Auto-scroll visible view area to ensure cursor is clearly visible
+    function scrollPlayheadIntoView(time) {
+      const state = store.getState();
+      const duration = state.audio.duration || 30;
+
+      if (el.waveformViewport) {
+        const trackW = el.waveformTrack ? el.waveformTrack.clientWidth : el.waveformViewport.clientWidth;
+        const viewW = el.waveformViewport.clientWidth;
+        const targetScroll = calculateHomeViewportScroll(time, duration, trackW, viewW);
+
+        el.waveformViewport.scrollLeft = targetScroll;
+        if (el.annotationViewport) {
+          el.annotationViewport.scrollLeft = targetScroll;
+        }
+        if (el.pianoRollGridContainer) {
+          const prTrackW = el.pianoRollGridContent ? el.pianoRollGridContent.clientWidth : trackW;
+          const prViewW = el.pianoRollGridContainer.clientWidth || viewW;
+          const prTargetScroll = calculateHomeViewportScroll(time, duration, prTrackW, prViewW);
+          el.pianoRollGridContainer.scrollLeft = prTargetScroll;
+        }
+      }
+    }
+
+    // Home / Return to Beat Start or Loop A handler
+    function handleHomeRewind() {
+      const targetTime = store.getHomePosition();
+      seekAudio(targetTime, true);
+      store.setIsPlaying(false);
+      scrollPlayheadIntoView(targetTime);
+    }
+
     // Transport buttons
     el.btnPlayPause.addEventListener('click', () => {
       togglePlayback();
     });
     el.btnStopRewind.addEventListener('click', () => {
-      seekAudio(0, true);
-      store.setIsPlaying(false);
+      handleHomeRewind();
     });
     el.btnSkipBack1.addEventListener('click', () => {
       seekAudio(store.getState().playback.currentTime - 1.0, true);
@@ -3825,8 +4103,16 @@
 
     // Tempo, Time Signature & Snap (Task 7.1)
     el.inputBpm.addEventListener('change', (e) => {
-      store.setBpm(parseFloat(e.target.value));
+      const prevBpm = store.getState().tempo.bpm;
+      const targetBpm = parseFloat(e.target.value);
+      store.setBpm(targetBpm);
+      const curBpm = store.getState().tempo.bpm;
+      if (prevBpm && prevBpm !== curBpm && typeof lastPianoRollDuration === 'number') {
+        lastPianoRollDuration = Math.max(0.02, Math.round(lastPianoRollDuration * (prevBpm / curBpm) * 10000) / 10000);
+      }
       renderTimeRulerGrid();
+      renderAnnotationTrack();
+      renderSimpleNotesRibbon();
       if (store.getState().view.editorMode !== 'simple') {
         renderPianoRollGrid();
       }
@@ -3906,10 +4192,17 @@
         const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
         if (avgInterval > 150 && avgInterval < 3000) {
           const calculatedBpm = Math.round(60000 / avgInterval);
+          const prevBpm = store.getState().tempo.bpm;
           store.setBpm(calculatedBpm);
+          const curBpm = store.getState().tempo.bpm;
+          if (prevBpm && prevBpm !== curBpm && typeof lastPianoRollDuration === 'number') {
+            lastPianoRollDuration = Math.max(0.02, Math.round(lastPianoRollDuration * (prevBpm / curBpm) * 10000) / 10000);
+          }
           el.inputBpm.value = calculatedBpm;
           showToast(`BPM set to ${calculatedBpm}`, 'info');
           renderTimeRulerGrid();
+          renderAnnotationTrack();
+          renderSimpleNotesRibbon();
           if (store.getState().view.editorMode !== 'simple') {
             renderPianoRollGrid();
           }
@@ -3993,9 +4286,11 @@
     if (el.pianoKeysGutter) {
       el.pianoKeysGutter.addEventListener('wheel', (e) => {
         if (el.pianoRollGridContainer) {
+          e.preventDefault();
           el.pianoRollGridContainer.scrollTop += e.deltaY;
+          el.pianoKeysGutter.scrollTop = el.pianoRollGridContainer.scrollTop;
         }
-      }, { passive: true });
+      }, { passive: false });
     }
 
     // --- Interactive Waveform Scrubbing, Seeking, Panning & A-B Range Selection (Tasks 1.1, 1.2 & 1.4) ---
@@ -4195,6 +4490,20 @@
           el.annotationViewport.scrollLeft += (e.deltaY || e.deltaX);
         }
       }, { passive: false });
+
+      // Click anywhere on empty annotation track lane to unselect note
+      el.annotationViewport.addEventListener('click', (e) => {
+        if (!e.target.closest('.annotation-block')) {
+          if (store.getState().view.selectedNoteId || selectedNoteIds.size > 0) {
+            store.setSelectedNoteId(null);
+            selectedNoteIds.clear();
+            renderAnnotationTrack();
+            if (store.getState().view.editorMode !== 'simple') {
+              renderPianoRollGrid();
+            }
+          }
+        }
+      });
     }
 
     // Global mousemove for all drag modes
@@ -4427,7 +4736,7 @@
             const prTrackW = el.pianoRollGridContent ? el.pianoRollGridContent.clientWidth : trackW;
             const prPlayheadPx = (curTime / duration) * prTrackW;
             const prViewW = el.pianoRollGridContainer.clientWidth;
-            const prScrollTarget = prPlayheadPx - (prViewW * 0.4);
+            const prScrollTarget = prPlayheadPx - (prViewW * 0.5);
             if (prScrollTarget > 0) {
               el.pianoRollGridContainer.scrollLeft = prScrollTarget;
             }
@@ -4929,9 +5238,12 @@
       const swingFactor = state.tempo.swingFactor || 0.5;
       const snappedStart = quantizeTime(state.playback.currentTime, state.tempo.bpm, snap, gridOffset, swingFactor);
 
-      // Duration calculated from selectedDuration preset (normalized to BPM)
+      // Duration calculated from selectedDuration preset (normalized to BPM) or lastPianoRollDuration
       const beatSec = 60 / state.tempo.bpm;
-      const noteDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
+      const noteDuration = (state.view.editorMode === 'piano-roll')
+        ? getPianoRollInsertDuration()
+        : Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
+      lastPianoRollDuration = noteDuration;
       const activeScale = (state.theory && state.theory.activeScale) || 'none';
       const rawPitch = `${selectedPitchLetter}${selectedOctave}`;
       const midi = noteNameToMidi(rawPitch);
@@ -4942,7 +5254,12 @@
         pitchName,
         startTime: snappedStart,
         duration: noteDuration
-      }, { monophonic: state.view.editorMode === 'simple' });
+      }, { monophonic: state.view.editorMode === 'simple', select: false });
+
+      // In simple mode, remove selection after inserting a note so it does not obstruct the next note
+      if (state.view.editorMode === 'simple') {
+        store.setSelectedNoteId(null);
+      }
 
       // Audition preview
       store.eventBus.emit('audition:note', {
@@ -4990,7 +5307,7 @@
       });
 
       playNotePreview(midi, 0.25);
-      showToast(`Updated note to ${pitchName} (${noteDuration.toFixed(2)}s)`, 'success');
+      showToast(`Updated note to ${pitchName} (${durationToNoteName(noteDuration, state.tempo.bpm)})`, 'success');
       renderSimpleNotesRibbon();
       renderAnnotationTrack();
       if (state.view.editorMode !== 'simple') {
@@ -5006,7 +5323,9 @@
       const chordLabel = prompt('Enter chord symbol (e.g., Cmaj7, Dm7, G7):', 'C');
       if (chordLabel) {
         const snap = state.tempo.snap;
-        const snappedStart = quantizeTime(state.playback.currentTime, state.tempo.bpm, snap);
+        const gridOffset = state.tempo.gridOffset || 0;
+        const swingFactor = state.tempo.swingFactor || 0.5;
+        const snappedStart = quantizeTime(state.playback.currentTime, state.tempo.bpm, snap, gridOffset, swingFactor);
         const beatSec = 60 / state.tempo.bpm;
         const duration = Math.max(0.1, beatSec * 4); // 1 bar default for chord
         store.addNote({
@@ -5015,7 +5334,11 @@
           startTime: snappedStart,
           duration: duration,
           chordLabel: chordLabel.trim()
-        }, { monophonic: false });
+        }, { monophonic: false, select: false });
+
+        if (state.view.editorMode === 'simple') {
+          store.setSelectedNoteId(null);
+        }
 
         renderSimpleNotesRibbon();
         renderAnnotationTrack();
@@ -5113,6 +5436,8 @@
       btn.addEventListener('click', () => {
         selectedBaseDuration = parseFloat(btn.dataset.duration);
         selectedDuration = getEffectiveDuration();
+        const beatSec = 60 / store.getState().tempo.bpm;
+        lastPianoRollDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
         applySelectedDurationToActiveNote();
         updateSelectedPitchDisplay();
       });
@@ -5124,6 +5449,8 @@
         isDotted = !isDotted;
         if (isDotted) isTriplet = false;
         selectedDuration = getEffectiveDuration();
+        const beatSec = 60 / store.getState().tempo.bpm;
+        lastPianoRollDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
         applySelectedDurationToActiveNote();
         updateSelectedPitchDisplay();
       });
@@ -5135,6 +5462,8 @@
         isTriplet = !isTriplet;
         if (isTriplet) isDotted = false;
         selectedDuration = getEffectiveDuration();
+        const beatSec = 60 / store.getState().tempo.bpm;
+        lastPianoRollDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
         applySelectedDurationToActiveNote();
         updateSelectedPitchDisplay();
       });
@@ -5200,17 +5529,22 @@
       el.btnSimpleInsertNote.addEventListener('click', insertNoteAtCursor);
     }
 
-    // Clear Notes for Active Track Button
-    if (el.btnClearTrackNotes) {
-      el.btnClearTrackNotes.addEventListener('click', () => {
-        const state = store.getState();
-        const activeTrack = state.tracks.find(t => t.id === state.view.activeTrackId);
-        const trackName = activeTrack ? activeTrack.name : 'active';
-        if (confirm(`Clear all transcribed notes from the ${trackName} track?`)) {
-          store.clearNotes(state.view.activeTrackId);
+    // Remove Note Button (Del)
+    if (el.btnSimpleDeleteNote) {
+      el.btnSimpleDeleteNote.addEventListener('click', () => {
+        const selId = store.getState().view.selectedNoteId;
+        const idsToDelete = new Set(selectedNoteIds);
+        if (selId) idsToDelete.add(selId);
+        if (idsToDelete.size > 0) {
+          store.deleteNotes(Array.from(idsToDelete));
+          selectedNoteIds.clear();
+          store.setSelectedNoteId(null);
+          showToast(`Deleted ${idsToDelete.size} note${idsToDelete.size > 1 ? 's' : ''}`, 'info');
           renderSimpleNotesRibbon();
           renderAnnotationTrack();
           renderPianoRollGrid();
+        } else {
+          showToast('Please select a note to remove first', 'info');
         }
       });
     }
@@ -5374,20 +5708,176 @@
         if (pianoRollDragState) return;
 
         const { x, y } = getPianoRollCoords(e);
+        const state = store.getState();
+        const duration = state.audio.duration || 30;
+        const gridOffset = state.tempo.gridOffset || 0;
+        const contentW = el.pianoRollGridContent ? el.pianoRollGridContent.clientWidth : (el.canvasPianoRoll.clientWidth || 1000);
+        const beat1X = (duration > 0 && gridOffset >= 0 && gridOffset <= duration) ? (gridOffset / duration) * contentW : -999;
+
+        if (y <= 24 && Math.abs(x - beat1X) <= 16) {
+          el.pianoRollGridContainer.style.cursor = 'col-resize';
+          if (pianoRollHoverPreview) {
+            pianoRollHoverPreview = null;
+            document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
+            renderPianoRollGrid();
+          }
+          return;
+        }
+
         const hit = getNoteAtPianoRollPos(x, y);
 
         if (currentPianoRollTool === 'erase') {
           el.pianoRollGridContainer.style.cursor = hit ? 'pointer' : 'default';
+          if (pianoRollHoverPreview) {
+            pianoRollHoverPreview = null;
+            document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
+            renderPianoRollGrid();
+          }
         } else {
           if (hit && hit.isRightEdge) {
             el.pianoRollGridContainer.style.cursor = 'ew-resize';
+            if (pianoRollHoverPreview) {
+              pianoRollHoverPreview = null;
+              document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
+              renderPianoRollGrid();
+            }
           } else if (hit) {
             el.pianoRollGridContainer.style.cursor = 'move';
+            if (pianoRollHoverPreview) {
+              pianoRollHoverPreview = null;
+              document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
+              renderPianoRollGrid();
+            }
           } else {
             el.pianoRollGridContainer.style.cursor = 'crosshair';
+            // Preview before inserting note
+            const state = store.getState();
+            const duration = state.audio.duration || 30;
+            const contentW = el.pianoRollGridContent ? el.pianoRollGridContent.clientWidth : (el.canvasPianoRoll.clientWidth || 1000);
+            const hoverTime = Math.max(0, Math.min(duration, (x / contentW) * duration));
+            const rowIdx = Math.max(0, Math.min(PIANO_NUM_KEYS - 1, Math.floor(y / PIANO_ROW_HEIGHT)));
+            const hoverMidi = PIANO_MAX_MIDI - rowIdx;
+            const snap = state.tempo.snap;
+            const gridOffset = state.tempo.gridOffset || 0;
+            const swingFactor = state.tempo.swingFactor || 0.5;
+            const snappedStart = quantizeTime(hoverTime, state.tempo.bpm, snap, gridOffset, swingFactor);
+            const insertDuration = getPianoRollInsertDuration();
+
+            pianoRollHoverPreview = {
+              midi: hoverMidi,
+              startTime: snappedStart,
+              duration: insertDuration
+            };
+
+            if (hoverMidi !== lastHoverAuditionMidi) {
+              lastHoverAuditionMidi = hoverMidi;
+              document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
+              document.getElementById(`piano-key-${hoverMidi}`)?.classList.add('playing');
+            }
+            renderPianoRollGrid();
           }
         }
       });
+
+      el.canvasPianoRoll.addEventListener('mouseleave', () => {
+        lastHoverAuditionMidi = null;
+        if (pianoRollHoverPreview) {
+          pianoRollHoverPreview = null;
+          document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
+          renderPianoRollGrid();
+        }
+      });
+
+      // Piano Roll Wheel Navigation & Duration Control:
+      // - Normal Scroll Wheel: move piano roll view up and down
+      // - Hold Shift + Scroll Wheel: change note duration
+      // - Ctrl + Scroll Wheel: horizontal zoom
+      function handlePianoRollWheel(e) {
+        if (e.shiftKey) {
+          // --- Hold Shift + Scroll Wheel: Change Note Duration ---
+          e.preventDefault();
+          const state = store.getState();
+          const beatSec = 60 / state.tempo.bpm;
+          // Comprehensive musical note duration presets:
+          // 1/64, 1/32, 1/16, 1/16., 1/8, 1/8., 1/4, 1/4., 1/2, 1/2., 1/1
+          const BEAT_PRESETS = [0.0625, 0.125, 0.1875, 0.25, 0.375, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0];
+          const DURATION_PRESETS = BEAT_PRESETS.map(b => Math.round(b * beatSec * 10000) / 10000);
+
+          // If hovering with Draw tool, user is adjusting the NEXT note duration (ghost preview)!
+          const isPreparingNextNote = Boolean(pianoRollHoverPreview && currentPianoRollTool === 'draw');
+
+          const selId = state.view.selectedNoteId;
+          const selectedNote = (!isPreparingNextNote && selId) ? state.notes.find(n => n.id === selId) : null;
+          const currentDur = (selectedNote && selectedNote.duration) ? selectedNote.duration : getPianoRollInsertDuration();
+          const dir = e.deltaY < 0 ? 1 : -1; // scroll up = increase duration, scroll down = decrease
+
+          let closestIdx = 0;
+          let minDiff = Infinity;
+          for (let i = 0; i < DURATION_PRESETS.length; i++) {
+            const diff = Math.abs(DURATION_PRESETS[i] - currentDur);
+            if (diff < minDiff) {
+              minDiff = diff;
+              closestIdx = i;
+            }
+          }
+
+          const nextIdx = Math.max(0, Math.min(DURATION_PRESETS.length - 1, closestIdx + dir));
+          const nextDur = DURATION_PRESETS[nextIdx];
+
+          lastPianoRollDuration = nextDur;
+          if (pianoRollHoverPreview) {
+            pianoRollHoverPreview.duration = nextDur;
+          }
+          if (selectedNote) {
+            store.updateNote(selectedNote.id, { duration: nextDur });
+          }
+
+          renderPianoRollGrid();
+          renderAnnotationTrack();
+          renderSimpleNotesRibbon();
+          showToast(`Duration: ${durationToNoteName(nextDur, state.tempo.bpm)}`, 'info');
+
+        } else if (e.ctrlKey) {
+          // --- Ctrl + Wheel: Zoom centered at cursor ---
+          e.preventDefault();
+          const currentZoom = store.getState().view.zoom || 1.0;
+          const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+          const newZoom = Math.max(0.5, Math.min(30, currentZoom * zoomFactor));
+          updateZoomView(newZoom);
+
+        } else {
+          // --- Normal Scroll Wheel: Move piano roll view up and down ---
+          e.preventDefault();
+          if (el.pianoRollGridContainer) {
+            el.pianoRollGridContainer.scrollTop += e.deltaY;
+            if (el.pianoKeysGutter) {
+              el.pianoKeysGutter.scrollTop = el.pianoRollGridContainer.scrollTop;
+            }
+
+            // Immediately update hover preview row and key highlight during scroll
+            if (currentPianoRollTool === 'draw' && !pianoRollDragState) {
+              const { x, y } = getPianoRollCoords(e);
+              const rowIdx = Math.max(0, Math.min(PIANO_NUM_KEYS - 1, Math.floor(y / PIANO_ROW_HEIGHT)));
+              const hoverMidi = PIANO_MAX_MIDI - rowIdx;
+              if (pianoRollHoverPreview) {
+                pianoRollHoverPreview.midi = hoverMidi;
+              }
+              document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
+              document.getElementById(`piano-key-${hoverMidi}`)?.classList.add('playing');
+              renderPianoRollGrid();
+            }
+          }
+        }
+      }
+
+      el.canvasPianoRoll.addEventListener('wheel', handlePianoRollWheel, { passive: false });
+      if (el.pianoRollGridContainer && el.pianoRollGridContainer !== el.canvasPianoRoll) {
+        el.pianoRollGridContainer.addEventListener('wheel', (e) => {
+          if (e.target !== el.canvasPianoRoll) {
+            handlePianoRollWheel(e);
+          }
+        }, { passive: false });
+      }
 
       el.canvasPianoRoll.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
@@ -5399,6 +5889,14 @@
         const clickTime = Math.max(0, Math.min(duration, (x / contentW) * duration));
         const rowIdx = Math.max(0, Math.min(PIANO_NUM_KEYS - 1, Math.floor(y / PIANO_ROW_HEIGHT)));
         const clickMidi = PIANO_MAX_MIDI - rowIdx;
+
+        // Check if clicking near Beat 1.1 Downbeat Marker badge at top
+        const gridOffset = state.tempo.gridOffset || 0;
+        const beat1X = (duration > 0 && gridOffset >= 0 && gridOffset <= duration) ? (gridOffset / duration) * contentW : -999;
+        if (y <= 24 && Math.abs(x - beat1X) <= 16) {
+          draggingGridOffsetMarker = true;
+          return;
+        }
 
         if (currentPianoRollTool === 'erase') {
           if (hit) {
@@ -5466,26 +5964,28 @@
 
         // Clicking on empty grid: Draw new note
         const snap = state.tempo.snap;
-        const snappedStart = quantizeTime(clickTime, state.tempo.bpm, snap);
-        const beatSec = 60 / state.tempo.bpm;
-        const defaultDuration = Math.max(0.05, Math.round(((selectedDuration / 0.5) * beatSec) * 10000) / 10000);
+        const swingFactor = state.tempo.swingFactor || 0.5;
+        const snappedStart = quantizeTime(clickTime, state.tempo.bpm, snap, gridOffset, swingFactor);
+        const insertDuration = getPianoRollInsertDuration();
 
         const newNote = store.addNote({
           trackId: state.view.activeTrackId,
           midi: clickMidi,
           pitchName: midiToNoteName(clickMidi),
           startTime: snappedStart,
-          duration: defaultDuration
+          duration: insertDuration
         }, { monophonic: false });
 
+        lastPianoRollDuration = insertDuration;
+        pianoRollHoverPreview = null;
         playNotePreview(clickMidi, 0.25);
-        selectedNoteIds = new Set([newNote.id]);
-        store.setSelectedNoteId(newNote.id);
+        selectedNoteIds.clear();
+        store.setSelectedNoteId(null);
 
         pianoRollDragState = {
           type: 'draw_new',
           targetNote: newNote,
-          origDuration: defaultDuration,
+          origDuration: insertDuration,
           startX: x,
           startTime: snappedStart
         };
@@ -5524,8 +6024,19 @@
 
       if (pianoRollDragState.type === 'resize' || pianoRollDragState.type === 'draw_new') {
         const dt = currTime - pianoRollDragState.startTime;
-        let newDur = Math.max(0.05, Math.round((pianoRollDragState.origDuration + dt) * 1000) / 1000);
-        pianoRollDragState.targetNote.duration = newDur;
+        const rawDur = Math.max(0.05, pianoRollDragState.origDuration + dt);
+        const snap = state.tempo.snap;
+        const gridOffset = state.tempo.gridOffset || 0;
+        const swingFactor = state.tempo.swingFactor || 0.5;
+        let finalDur = rawDur;
+        if (!e.shiftKey && snap !== 'off') {
+          const rawEnd = pianoRollDragState.targetNote.startTime + rawDur;
+          const snappedEnd = quantizeTime(rawEnd, state.tempo.bpm, snap, gridOffset, swingFactor);
+          finalDur = Math.max(0.05, Math.round((snappedEnd - pianoRollDragState.targetNote.startTime) * 10000) / 10000);
+        } else {
+          finalDur = Math.round(rawDur * 1000) / 1000;
+        }
+        pianoRollDragState.targetNote.duration = finalDur;
         renderPianoRollGrid();
         renderAnnotationTrack();
       } else if (pianoRollDragState.type === 'move') {
@@ -5536,8 +6047,10 @@
           pianoRollDragState.hasMoved = true;
           let newStart = Math.max(0, pianoRollDragState.origNote.startTime + dt);
           const snap = state.tempo.snap;
+          const gridOffset = state.tempo.gridOffset || 0;
+          const swingFactor = state.tempo.swingFactor || 0.5;
           if (snap !== 'off') {
-            newStart = quantizeTime(newStart, state.tempo.bpm, snap);
+            newStart = quantizeTime(newStart, state.tempo.bpm, snap, gridOffset, swingFactor);
           }
           const newMidi = Math.max(PIANO_MIN_MIDI, Math.min(PIANO_MAX_MIDI, pianoRollDragState.origNote.midi + dMidi));
 
@@ -5593,6 +6106,11 @@
         store.updateNote(pianoRollDragState.targetNote.id, {
           duration: pianoRollDragState.targetNote.duration
         });
+        lastPianoRollDuration = pianoRollDragState.targetNote.duration;
+        if (pianoRollDragState.type === 'draw_new') {
+          selectedNoteIds.clear();
+          store.setSelectedNoteId(null);
+        }
       } else if (pianoRollDragState.type === 'move' && pianoRollDragState.hasMoved) {
         store.updateNote(pianoRollDragState.targetNote.id, {
           startTime: pianoRollDragState.targetNote.startTime,
@@ -5624,8 +6142,7 @@
         togglePlayback();
       } else if (e.code === 'Home') {
         e.preventDefault();
-        seekAudio(0);
-        store.setIsPlaying(false);
+        handleHomeRewind();
       } else if (e.code === 'ArrowLeft') {
         e.preventDefault();
         const delta = e.shiftKey ? -5.0 : -1.0;
@@ -5637,15 +6154,12 @@
       } else if (e.code === 'KeyN' || e.code === 'Enter') {
         e.preventDefault();
         insertNoteAtCursor();
-      } else if (e.code === 'KeyU') {
-        e.preventDefault();
-        updateSelectedNoteFromCurrent();
       } else if (e.code === 'Period') {
         // MuseScore hotkey '.' for Dotted Note Toggle
         e.preventDefault();
         if (el.btnToggleDotted) el.btnToggleDotted.click();
-      } else if (e.code === 'KeyT' || ((e.ctrlKey || e.metaKey) && e.code === 'Digit3')) {
-        // MuseScore hotkey 'Ctrl+3' or 'T' for Triplet Tuplet Toggle
+      } else if ((e.ctrlKey || e.metaKey) && (e.code === 'Digit3' || e.key === '3')) {
+        // MuseScore hotkey 'Ctrl+3' for Triplet Tuplet Toggle (dedicated shortcut)
         e.preventDefault();
         if (el.btnToggleTriplet) el.btnToggleTriplet.click();
       } else if (e.code === 'KeyC' && !(e.ctrlKey || e.metaKey)) {
@@ -5672,7 +6186,8 @@
             duration: copiedNote.duration,
             chordLabel: copiedNote.chordLabel
           }, { monophonic: store.getState().view.editorMode === 'simple' });
-          store.setSelectedNoteId(pasted.id);
+          selectedNoteIds.clear();
+          store.setSelectedNoteId(null);
           playNotePreview(pasted.midi, 0.25);
           showToast(`Pasted note ${pasted.pitchName}`, 'success');
           renderPianoRollGrid();
@@ -5693,7 +6208,8 @@
             duration: note.duration,
             chordLabel: note.chordLabel
           }, { monophonic: store.getState().view.editorMode === 'simple' });
-          store.setSelectedNoteId(dup.id);
+          selectedNoteIds.clear();
+          store.setSelectedNoteId(null);
           playNotePreview(dup.midi, 0.25);
           showToast(`Duplicated note ${dup.pitchName}`, 'success');
           renderPianoRollGrid();
@@ -5961,12 +6477,23 @@
       clearAudioBlobFromIndexedDb,
       saveSessionToLocalStorage,
       loadSessionFromLocalStorage,
-      clearAllPersistedData
+      clearAllPersistedData,
+      handleHomeRewind,
+      scrollPlayheadIntoView,
+      calculateHomePosition,
+      calculateHomeViewportScroll,
+      durationToNoteName,
+      MUSICAL_NOTE_DURATIONS
     };
     window.handleAudioFileSelected = handleAudioFileSelected;
     window.updateZoomView = updateZoomView;
     window.seekAudio = seekAudio;
     window.togglePlayback = togglePlayback;
+    window.handleHomeRewind = handleHomeRewind;
+    window.scrollPlayheadIntoView = scrollPlayheadIntoView;
+    window.calculateHomePosition = calculateHomePosition;
+    window.calculateHomeViewportScroll = calculateHomeViewportScroll;
+    window.durationToNoteName = durationToNoteName;
     window.renderWaveform = renderWaveform;
     window.renderTimeRulerGrid = renderTimeRulerGrid;
     window.renderLoopOverlay = renderLoopOverlay;

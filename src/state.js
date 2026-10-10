@@ -20,12 +20,48 @@ export const TRACK_COLORS = [
 ];
 
 /**
+ * Strips HTML tags and angle brackets from untrusted strings.
+ * @param {*} str
+ * @returns {string}
+ */
+export function sanitizeText(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[<>]/g, '').trim();
+}
+
+/**
+ * Validates a color hex string, returning fallback if invalid.
+ * @param {*} col
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function sanitizeColor(col, fallback = '#38bdf8') {
+  return (typeof col === 'string' && /^#[0-9a-fA-F]{6}$/.test(col)) ? col : fallback;
+}
+
+/**
+ * Recursively filters out Prototype Pollution keys (__proto__, constructor, prototype).
+ * @param {*} obj
+ * @returns {*}
+ */
+export function stripProtoPollution(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(stripProtoPollution);
+  const clean = {};
+  for (const key of Object.keys(obj)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    clean[key] = stripProtoPollution(obj[key]);
+  }
+  return clean;
+}
+
+/**
  * Converts a MIDI note number (21 = A0, 60 = C4, 108 = C8) to scientific pitch name.
  * @param {number} midi
  * @returns {string} e.g. "C4", "F#3"
  */
 export function midiToNoteName(midi) {
-  if (midi < 12 || midi > 127) return 'C4';
+  if (midi < 0 || midi > 127) return 'C4';
   const octave = Math.floor(midi / 12) - 1;
   const noteIndex = midi % 12;
   return `${NOTE_NAMES[noteIndex]}${octave}`;
@@ -390,18 +426,37 @@ export function exportLetterNotes(state) {
 
   const barsOutput = [];
 
+  // Pre-index notes into eighth-note slot buckets for O(1) lookup (AUDIT-O1)
+  const slotMap = new Map();
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i];
+    const rel = n.startTime - gridOffset + 0.02;
+    if (rel < 0) continue;
+    let b = Math.floor((rel + 1e-7) / barSec);
+    let rem = rel - (b * barSec);
+    let s = Math.floor((rem + 1e-7) / eighthSec);
+    if (s >= slotsPerBar) {
+      b += 1;
+      s = 0;
+    }
+    if (s >= 0) {
+      const key = `${b}:${s}`;
+      const bucket = slotMap.get(key);
+      if (bucket) {
+        bucket.push(n);
+      } else {
+        slotMap.set(key, [n]);
+      }
+    }
+  }
+
   for (let b = 0; b < totalBars; b++) {
-    const barStart = gridOffset + (b * barSec);
     const slots = new Array(slotsPerBar).fill('-');
 
     for (let s = 0; s < slotsPerBar; s++) {
-      const slotStart = barStart + (s * eighthSec);
-      const slotEnd = slotStart + eighthSec;
+      const startingNotes = slotMap.get(`${b}:${s}`);
 
-      // Find notes starting in this eighth-note slot
-      const startingNotes = notes.filter(n => n.startTime >= (slotStart - 0.02) && n.startTime < (slotEnd - 0.02));
-
-      if (startingNotes.length > 0) {
+      if (startingNotes && startingNotes.length > 0) {
         if (startingNotes.length === 1) {
           const note = startingNotes[0];
           // Strip octave digits for pure letter note notation (e.g. "C4" -> "C", "F#3" -> "F#")
@@ -417,12 +472,6 @@ export function exportLetterNotes(state) {
           // Multiple notes in this eighth slot (e.g. 16th notes): combine their letters e.g. "CC"
           const letters = startingNotes.map(n => (n.pitchName || 'C').replace(/-?\d+$/, '')).join('');
           slots[s] = letters;
-        }
-      } else {
-        // Check if a note from earlier continues sustaining into this slot
-        const sustaining = notes.find(n => n.startTime < (slotStart - 0.02) && (n.startTime + n.duration) >= (slotEnd - 0.02));
-        if (sustaining && slots[s] === '-') {
-          slots[s] = '-';
         }
       }
     }
@@ -544,6 +593,8 @@ export class Store {
       future: [],
       maxDepth: 50
     };
+    this._lastHistoryAction = null;
+    this._updateCommittedSnapshot('Initial');
   }
 
   getState() {
@@ -565,17 +616,33 @@ export class Store {
     }
   }
 
-  /**
-   * Captures an undoable snapshot of tracks & notes before mutating
-   */
-  snapshotForHistory(actionName = 'Edit') {
-    const snapshot = {
+  _createSnapshot(actionName = 'Edit') {
+    return {
       actionName,
       tracks: JSON.parse(JSON.stringify(this.state.tracks)),
       notes: JSON.parse(JSON.stringify(this.state.notes)),
       tempo: JSON.parse(JSON.stringify(this.state.tempo)),
       theory: JSON.parse(JSON.stringify(this.state.theory || { activeScale: 'none' })),
       loop: JSON.parse(JSON.stringify(this.state.playback.loop))
+    };
+  }
+
+  _updateCommittedSnapshot(actionName = 'Committed') {
+    this._committedSnapshot = this._createSnapshot(actionName);
+  }
+
+  /**
+   * Captures an undoable snapshot of tracks & notes before mutating
+   */
+  snapshotForHistory(actionName = 'Edit') {
+    const base = this._committedSnapshot || this._createSnapshot(actionName);
+    const snapshot = {
+      actionName,
+      tracks: JSON.parse(JSON.stringify(base.tracks)),
+      notes: JSON.parse(JSON.stringify(base.notes)),
+      tempo: JSON.parse(JSON.stringify(base.tempo)),
+      theory: JSON.parse(JSON.stringify(base.theory || { activeScale: 'none' })),
+      loop: JSON.parse(JSON.stringify(base.loop))
     };
     this.history.past.push(snapshot);
     if (this.history.past.length > this.history.maxDepth) {
@@ -594,14 +661,8 @@ export class Store {
 
   undo() {
     if (!this.canUndo()) return false;
-    const currentState = {
-      actionName: 'Current',
-      tracks: JSON.parse(JSON.stringify(this.state.tracks)),
-      notes: JSON.parse(JSON.stringify(this.state.notes)),
-      tempo: JSON.parse(JSON.stringify(this.state.tempo)),
-      theory: JSON.parse(JSON.stringify(this.state.theory || { activeScale: 'none' })),
-      loop: JSON.parse(JSON.stringify(this.state.playback.loop))
-    };
+    this._lastHistoryAction = null;
+    const currentState = this._createSnapshot('Current');
     this.history.future.push(currentState);
 
     const previousState = this.history.past.pop();
@@ -611,6 +672,8 @@ export class Store {
     if (previousState.theory) this.state.theory = previousState.theory;
     this.state.playback.loop = previousState.loop;
 
+    this._updateCommittedSnapshot(previousState.actionName);
+
     this.notify('undo', { actionName: previousState.actionName });
     this.eventBus.emit('history:changed', { canUndo: this.canUndo(), canRedo: this.canRedo() });
     return true;
@@ -618,14 +681,8 @@ export class Store {
 
   redo() {
     if (!this.canRedo()) return false;
-    const currentState = {
-      actionName: 'Current',
-      tracks: JSON.parse(JSON.stringify(this.state.tracks)),
-      notes: JSON.parse(JSON.stringify(this.state.notes)),
-      tempo: JSON.parse(JSON.stringify(this.state.tempo)),
-      theory: JSON.parse(JSON.stringify(this.state.theory || { activeScale: 'none' })),
-      loop: JSON.parse(JSON.stringify(this.state.playback.loop))
-    };
+    this._lastHistoryAction = null;
+    const currentState = this._createSnapshot('Current');
     this.history.past.push(currentState);
 
     const nextState = this.history.future.pop();
@@ -635,9 +692,30 @@ export class Store {
     if (nextState.theory) this.state.theory = nextState.theory;
     this.state.playback.loop = nextState.loop;
 
+    this._updateCommittedSnapshot(nextState.actionName);
+
     this.notify('redo', { actionName: nextState.actionName });
     this.eventBus.emit('history:changed', { canUndo: this.canUndo(), canRedo: this.canRedo() });
     return true;
+  }
+
+  /**
+   * Fully resets session state, audio metadata, loop, tracks, and history stack.
+   */
+  resetSession() {
+    this.state = JSON.parse(JSON.stringify(INITIAL_STATE));
+    this.history.past = [];
+    this.history.future = [];
+    this._lastHistoryAction = null;
+    this._updateCommittedSnapshot('Reset Session');
+    this.notify('session:reset', this.state);
+    this.eventBus.emit('session:reset', this.state);
+    this.eventBus.emit('history:changed', { canUndo: false, canRedo: false });
+    this.eventBus.emit('notes:changed', this.state.notes);
+    this.eventBus.emit('tracks:changed', this.state.tracks);
+    this.eventBus.emit('audio:loaded', this.state.audio);
+    this.eventBus.emit('playback:time', 0);
+    this.eventBus.emit('playback:loop', this.state.playback.loop);
   }
 
   // --- Audio State Actions ---
@@ -736,10 +814,12 @@ export class Store {
   }
 
   clearLoop() {
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Clear Loop');
     this.state.playback.loop.enabled = false;
     this.state.playback.loop.start = 0;
     this.state.playback.loop.end = this.state.audio.duration || 0;
+    this._updateCommittedSnapshot('Clear Loop');
     this.notify('playback:loop', this.state.playback.loop);
     this.eventBus.emit('playback:loop', this.state.playback.loop);
   }
@@ -771,6 +851,7 @@ export class Store {
     const oldBpm = this.state.tempo.bpm || 120;
     if (clampedBpm === oldBpm) return;
 
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Change BPM');
     this.state.tempo.bpm = clampedBpm;
 
@@ -785,13 +866,16 @@ export class Store {
       this.eventBus.emit('notes:changed', this.state.notes);
     }
 
+    this._updateCommittedSnapshot('Change BPM');
     this.notify('tempo:bpm', clampedBpm);
     this.eventBus.emit('tempo:bpm', clampedBpm);
   }
 
   setTimeSignature(numerator, denominator) {
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Change Time Signature');
     this.state.tempo.timeSignature = [numerator, denominator];
+    this._updateCommittedSnapshot('Change Time Signature');
     this.notify('tempo:signature', this.state.tempo.timeSignature);
   }
 
@@ -805,25 +889,31 @@ export class Store {
 
   setGridOffset(offsetSeconds) {
     const clamped = Math.max(0, Math.round(Number(offsetSeconds || 0) * 1000) / 1000);
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Change Grid Offset');
     this.state.tempo.gridOffset = clamped;
+    this._updateCommittedSnapshot('Change Grid Offset');
     this.notify('tempo:gridOffset', clamped);
     this.eventBus.emit('tempo:gridOffset', clamped);
   }
 
   setSwingFactor(factor) {
     const parsed = Math.max(0.5, Math.min(0.85, Number(factor) || 0.5));
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Change Swing Groove');
     this.state.tempo.swingFactor = parsed;
+    this._updateCommittedSnapshot('Change Swing Groove');
     this.notify('tempo:swing', parsed);
     this.eventBus.emit('tempo:swing', parsed);
   }
 
   setActiveScale(scale) {
     const validScale = MAJOR_SCALES[scale] ? scale : 'none';
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Change Active Scale');
     if (!this.state.theory) this.state.theory = {};
     this.state.theory.activeScale = validScale;
+    this._updateCommittedSnapshot('Change Active Scale');
     this.notify('theory:scale', validScale);
     this.eventBus.emit('theory:scale', validScale);
   }
@@ -864,10 +954,11 @@ export class Store {
 
   addNote(noteData, options = {}) {
     const isRest = Boolean(noteData.isRest || noteData.pitchName === 'REST' || noteData.pitchName === 'R');
+    this._lastHistoryAction = null;
     this.snapshotForHistory(isRest ? 'Add Rest' : 'Add Note');
     const id = noteData.id || `note-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const midi = isRest ? null : (noteData.midi !== undefined ? noteData.midi : noteNameToMidi(noteData.pitchName || 'C4'));
-    const pitchName = isRest ? 'REST' : (noteData.pitchName || midiToNoteName(midi));
+    const pitchName = isRest ? 'REST' : (sanitizeText(noteData.pitchName) || midiToNoteName(midi));
     const startTime = Math.max(0, noteData.startTime !== undefined ? noteData.startTime : 0);
     const duration = Math.max(0.05, noteData.duration !== undefined ? noteData.duration : 0.5);
     const trackId = noteData.trackId || this.state.view.activeTrackId;
@@ -910,7 +1001,7 @@ export class Store {
       startTime,
       duration,
       velocity: isRest ? 0 : (noteData.velocity !== undefined ? noteData.velocity : 0.8),
-      chordLabel: noteData.chordLabel || null,
+      chordLabel: noteData.chordLabel ? sanitizeText(noteData.chordLabel) : null,
       isRest
     };
 
@@ -923,6 +1014,7 @@ export class Store {
     } else {
       this.state.view.selectedNoteId = note.id;
     }
+    this._updateCommittedSnapshot(isRest ? 'Add Rest' : 'Add Note');
     this.notify('notes:add', note);
     this.eventBus.emit('notes:changed', this.state.notes);
     return note;
@@ -936,39 +1028,111 @@ export class Store {
     }, options);
   }
 
-  updateNote(noteId, updates) {
+  updateNote(noteId, updates, options = {}) {
     const index = this.state.notes.findIndex(n => n.id === noteId);
     if (index === -1) return null;
 
-    this.snapshotForHistory('Update Note');
+    if (options.recordHistory !== false) {
+      const now = Date.now();
+      const isCoalesced = this._lastHistoryAction &&
+        this._lastHistoryAction.type === 'updateNote' &&
+        this._lastHistoryAction.noteId === noteId &&
+        (now - this._lastHistoryAction.time < 800);
+
+      if (!isCoalesced) {
+        this.snapshotForHistory('Update Note');
+      }
+      this._lastHistoryAction = { type: 'updateNote', noteId, time: now };
+    }
+
     const note = this.state.notes[index];
 
-    if (updates.midi !== undefined) {
+    if (updates.isRest !== undefined) {
+      note.isRest = Boolean(updates.isRest);
+      if (note.isRest) {
+        note.midi = null;
+        note.pitchName = 'REST';
+        note.velocity = 0;
+      }
+    }
+
+    if (updates.midi !== undefined && !note.isRest) {
       note.midi = updates.midi;
       note.pitchName = midiToNoteName(updates.midi);
-    } else if (updates.pitchName !== undefined) {
-      note.pitchName = updates.pitchName;
-      note.midi = noteNameToMidi(updates.pitchName);
+    } else if (updates.pitchName !== undefined && !note.isRest) {
+      note.pitchName = sanitizeText(updates.pitchName);
+      if (note.pitchName === 'REST' || note.pitchName === 'R') {
+        note.isRest = true;
+        note.midi = null;
+        note.pitchName = 'REST';
+        note.velocity = 0;
+      } else {
+        note.midi = noteNameToMidi(note.pitchName);
+      }
     }
 
     if (updates.startTime !== undefined) note.startTime = Math.max(0, updates.startTime);
     if (updates.duration !== undefined) note.duration = Math.max(0.05, updates.duration);
     if (updates.velocity !== undefined) note.velocity = Math.max(0, Math.min(1, updates.velocity));
-    if (updates.chordLabel !== undefined) note.chordLabel = updates.chordLabel;
+    if (updates.chordLabel !== undefined) note.chordLabel = updates.chordLabel ? sanitizeText(updates.chordLabel) : null;
     if (updates.trackId !== undefined) note.trackId = updates.trackId;
 
     this.state.notes.sort((a, b) => a.startTime - b.startTime);
+    if (options.recordHistory !== false) {
+      this._updateCommittedSnapshot('Update Note');
+    }
     this.notify('notes:update', note);
     this.eventBus.emit('notes:changed', this.state.notes);
     return note;
+  }
+
+  /**
+   * Translates multiple selected notes synchronously by deltaTime and deltaMidi.
+   */
+  moveNotes(noteIds, { deltaTime = 0, deltaMidi = 0 } = {}, options = {}) {
+    if (!Array.isArray(noteIds) || noteIds.length === 0) return [];
+    if (deltaTime === 0 && deltaMidi === 0) return [];
+
+    if (options.recordHistory !== false) {
+      this._lastHistoryAction = null;
+      this.snapshotForHistory(`Move ${noteIds.length} Note${noteIds.length > 1 ? 's' : ''}`);
+    }
+
+    const idSet = new Set(noteIds);
+    const updatedNotes = [];
+
+    for (const note of this.state.notes) {
+      if (idSet.has(note.id)) {
+        if (deltaTime !== 0) {
+          note.startTime = Math.max(0, Math.round((note.startTime + deltaTime) * 10000) / 10000);
+        }
+        if (deltaMidi !== 0 && !note.isRest && typeof note.midi === 'number') {
+          note.midi = Math.max(0, Math.min(127, Math.round(note.midi + deltaMidi)));
+          note.pitchName = midiToNoteName(note.midi);
+        }
+        updatedNotes.push(note);
+      }
+    }
+
+    this.state.notes.sort((a, b) => a.startTime - b.startTime);
+    this._lastHistoryAction = null;
+    if (options.recordHistory !== false) {
+      this._updateCommittedSnapshot('Move Notes');
+    }
+
+    this.notify('notes:move', { notes: updatedNotes, deltaTime, deltaMidi });
+    this.eventBus.emit('notes:changed', this.state.notes);
+    return updatedNotes;
   }
 
   deleteNote(noteId) {
     const index = this.state.notes.findIndex(n => n.id === noteId);
     if (index === -1) return false;
 
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Delete Note');
     const [removedNote] = this.state.notes.splice(index, 1);
+    this._updateCommittedSnapshot('Delete Note');
     this.notify('notes:delete', removedNote);
     this.eventBus.emit('notes:changed', this.state.notes);
     return true;
@@ -980,17 +1144,20 @@ export class Store {
     const toRemove = this.state.notes.filter(n => idSet.has(n.id));
     if (toRemove.length === 0) return 0;
 
+    this._lastHistoryAction = null;
     this.snapshotForHistory(`Delete ${toRemove.length} Notes`);
     this.state.notes = this.state.notes.filter(n => !idSet.has(n.id));
     if (this.state.view.selectedNoteId && idSet.has(this.state.view.selectedNoteId)) {
       this.state.view.selectedNoteId = null;
     }
+    this._updateCommittedSnapshot(`Delete ${toRemove.length} Notes`);
     this.notify('notes:delete', toRemove);
     this.eventBus.emit('notes:changed', this.state.notes);
     return toRemove.length;
   }
 
   clearNotes(trackId = null) {
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Clear Notes');
     if (trackId) {
       this.state.notes = this.state.notes.filter(n => n.trackId !== trackId);
@@ -1001,6 +1168,7 @@ export class Store {
       const stillExists = this.state.notes.some(n => n.id === this.state.view.selectedNoteId);
       if (!stillExists) this.state.view.selectedNoteId = null;
     }
+    this._updateCommittedSnapshot('Clear Notes');
     this.notify('notes:clear', { trackId });
     this.eventBus.emit('notes:changed', this.state.notes);
   }
@@ -1008,12 +1176,13 @@ export class Store {
   // --- Track Actions ---
 
   addTrack(trackData = {}) {
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Add Track');
     const index = this.state.tracks.length;
     const defaultColor = TRACK_COLORS[index % TRACK_COLORS.length];
     const id = trackData.id || `track-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const name = trackData.name || `Track ${index + 1}`;
-    const color = trackData.color || defaultColor;
+    const name = sanitizeText(trackData.name) || `Track ${index + 1}`;
+    const color = sanitizeColor(trackData.color, defaultColor);
     const timbre = trackData.timbre || 'sine';
     const volume = typeof trackData.volume === 'number' ? Math.max(0, Math.min(1, trackData.volume)) : 1.0;
     const muted = Boolean(trackData.muted);
@@ -1023,6 +1192,7 @@ export class Store {
     this.state.tracks.push(newTrack);
     this.state.view.activeTrackId = id;
 
+    this._updateCommittedSnapshot('Add Track');
     this.notify('tracks:add', newTrack);
     this.eventBus.emit('tracks:changed', this.state.tracks);
     return newTrack;
@@ -1033,6 +1203,7 @@ export class Store {
     const index = this.state.tracks.findIndex(t => t.id === trackId);
     if (index === -1) return false;
 
+    this._lastHistoryAction = null;
     this.snapshotForHistory('Delete Track');
     const [removedTrack] = this.state.tracks.splice(index, 1);
 
@@ -1045,6 +1216,7 @@ export class Store {
       this.notify('view:activeTrack', this.state.view.activeTrackId);
     }
 
+    this._updateCommittedSnapshot('Delete Track');
     this.notify('tracks:delete', removedTrack);
     this.eventBus.emit('tracks:changed', this.state.tracks);
     this.eventBus.emit('notes:changed', this.state.notes);
@@ -1055,7 +1227,14 @@ export class Store {
     const track = this.state.tracks.find(t => t.id === trackId);
     if (!track) return null;
 
-    Object.assign(track, updates);
+    if (updates.name !== undefined) track.name = sanitizeText(updates.name) || track.name;
+    if (updates.color !== undefined) track.color = sanitizeColor(updates.color, track.color);
+    if (updates.timbre !== undefined) track.timbre = updates.timbre;
+    if (updates.volume !== undefined) track.volume = Math.max(0, Math.min(1, updates.volume));
+    if (updates.muted !== undefined) track.muted = Boolean(updates.muted);
+    if (updates.solo !== undefined) track.solo = Boolean(updates.solo);
+
+    this._updateCommittedSnapshot('Update Track');
     this.notify('tracks:update', track);
     this.eventBus.emit('tracks:changed', this.state.tracks);
     return track;
@@ -1065,6 +1244,7 @@ export class Store {
     const track = this.state.tracks.find(t => t.id === trackId);
     if (!track) return null;
     track.muted = !track.muted;
+    this._updateCommittedSnapshot('Toggle Mute');
     this.notify('tracks:update', track);
     this.eventBus.emit('tracks:changed', this.state.tracks);
     return track;
@@ -1074,6 +1254,7 @@ export class Store {
     const track = this.state.tracks.find(t => t.id === trackId);
     if (!track) return null;
     track.solo = !track.solo;
+    this._updateCommittedSnapshot('Toggle Solo');
     this.notify('tracks:update', track);
     this.eventBus.emit('tracks:changed', this.state.tracks);
     return track;
@@ -1108,15 +1289,90 @@ export class Store {
     }, null, 2);
   }
 
-  importSessionJSON(jsonString) {
+  importSessionJSON(jsonString, options = {}) {
     try {
-      const data = JSON.parse(jsonString);
-      this.snapshotForHistory('Import Session');
+      const rawData = JSON.parse(jsonString);
+      const data = stripProtoPollution(rawData);
+      if (options.recordHistory === true) {
+        this.snapshotForHistory('Import Session');
+      } else {
+        this.history.past = [];
+        this.history.future = [];
+        this._lastHistoryAction = null;
+      }
 
-      if (data.tempo) this.state.tempo = { ...this.state.tempo, ...data.tempo };
-      if (data.theory) this.state.theory = { ...this.state.theory, ...data.theory };
-      if (data.tracks && Array.isArray(data.tracks)) this.state.tracks = data.tracks;
-      if (data.notes && Array.isArray(data.notes)) this.state.notes = data.notes;
+      if (data.tempo && typeof data.tempo === 'object') {
+        const bpm = Number(data.tempo.bpm);
+        this.state.tempo = {
+          ...this.state.tempo,
+          ...data.tempo,
+          bpm: (Number.isFinite(bpm) && bpm > 0) ? bpm : this.state.tempo.bpm
+        };
+      }
+      if (data.theory && typeof data.theory === 'object') {
+        this.state.theory = { ...this.state.theory, ...data.theory };
+      }
+      if (data.tracks && Array.isArray(data.tracks)) {
+        this.state.tracks = data.tracks.map((t, idx) => {
+          if (!t || typeof t !== 'object') return null;
+          const id = typeof t.id === 'string' && t.id ? sanitizeText(t.id) : `track-${idx + 1}`;
+          const name = sanitizeText(t.name) || `Track ${idx + 1}`;
+          const color = sanitizeColor(t.color, TRACK_COLORS[idx % TRACK_COLORS.length]);
+          const timbre = ['sine', 'triangle', 'sawtooth', 'epiano'].includes(t.timbre) ? t.timbre : 'sine';
+          const vol = Number(t.volume);
+          const volume = Number.isFinite(vol) ? Math.max(0, Math.min(1, vol)) : 1.0;
+          const muted = Boolean(t.muted);
+          const solo = Boolean(t.solo);
+          return { id, name, color, timbre, volume, muted, solo };
+        }).filter(Boolean);
+        if (this.state.tracks.length === 0) {
+          this.state.tracks = [
+            { id: 'track-melody', name: 'Melody', color: '#38bdf8', timbre: 'sine', volume: 1.0, muted: false, solo: false }
+          ];
+        }
+      }
+      if (data.notes && Array.isArray(data.notes)) {
+        this.state.notes = data.notes.map((n, idx) => {
+          if (!n || typeof n !== 'object') return null;
+          const st = Number(n.startTime);
+          const startTime = (Number.isFinite(st) && st >= 0) ? Math.round(st * 10000) / 10000 : 0;
+          const dur = Number(n.duration);
+          const duration = (Number.isFinite(dur) && dur > 0) ? Math.round(dur * 10000) / 10000 : 0.5;
+          const isRest = Boolean(n.isRest || n.pitchName === 'REST' || n.pitchName === 'R');
+
+          let midi = null;
+          if (!isRest) {
+            const m = Number(n.midi);
+            if (Number.isInteger(m) && m >= 0 && m <= 127) {
+              midi = m;
+            } else if (typeof n.pitchName === 'string') {
+              midi = noteNameToMidi(n.pitchName);
+            } else {
+              midi = 60;
+            }
+          }
+
+          const pitchName = isRest ? 'REST' : (sanitizeText(n.pitchName) || midiToNoteName(midi));
+          const vel = Number(n.velocity);
+          const velocity = isRest ? 0 : (Number.isFinite(vel) && vel >= 0 && vel <= 1 ? vel : 0.8);
+          const chordLabel = n.chordLabel ? sanitizeText(n.chordLabel) : null;
+          const trackId = typeof n.trackId === 'string' && n.trackId ? sanitizeText(n.trackId) : 'track-melody';
+          const id = typeof n.id === 'string' && n.id ? sanitizeText(n.id) : `note-${idx}-${Date.now()}`;
+
+          return {
+            id,
+            trackId,
+            midi,
+            pitchName,
+            startTime,
+            duration,
+            velocity,
+            chordLabel,
+            isRest
+          };
+        }).filter(Boolean);
+        this.state.notes.sort((a, b) => a.startTime - b.startTime);
+      }
       if (data.playback && data.playback.loop) this.state.playback.loop = data.playback.loop;
       if (data.playback && typeof data.playback.currentTime === 'number') {
         this.state.playback.currentTime = data.playback.currentTime;
@@ -1128,8 +1384,10 @@ export class Store {
         this.setEditorMode(data.view.editorMode);
       }
 
+      this._updateCommittedSnapshot('Import Session');
       this.notify('session:imported', data);
       this.eventBus.emit('session:imported', data);
+      this.eventBus.emit('history:changed', { canUndo: this.canUndo(), canRedo: this.canRedo() });
       return true;
     } catch (err) {
       console.error('Failed to import session JSON:', err);

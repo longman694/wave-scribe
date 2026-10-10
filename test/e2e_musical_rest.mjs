@@ -108,15 +108,6 @@ async function run() {
   `);
   console.log('Notes in store:', notes);
 
-  // Inspect ribbon chips text
-  const ribbonChips = await evaluate(`
-    Array.from(document.querySelectorAll('#simple-notes-ribbon .simple-note-chip')).map(c => ({
-      text: c.innerText.replace(/\\n/g, ' '),
-      isRestClass: c.classList.contains('is-rest')
-    }))
-  `);
-  console.log('Ribbon chips:', ribbonChips);
-
   // Inspect annotation blocks text
   const annotationBlocks = await evaluate(`
     Array.from(document.querySelectorAll('#annotation-lane .annotation-block')).map(b => ({

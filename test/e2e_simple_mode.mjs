@@ -98,11 +98,11 @@ async function run() {
   `);
   await wait(150);
 
-  // 6. Check note chips in DOM
+  // 6. Check notes in annotation lane
   const noteLetters = await evaluate(`
-    Array.from(document.querySelectorAll('#simple-notes-ribbon .simple-note-letter')).map(el => el.textContent)
+    Array.from(document.querySelectorAll('#annotation-lane .annotation-block-pitch')).map(el => el.textContent)
   `);
-  console.log('4. Note letters in ribbon:', noteLetters);
+  console.log('4. Note letters in annotation lane:', noteLetters);
 
   const noteCountText = await evaluate("document.getElementById('simple-note-count').textContent");
   console.log('5. Note count readout:', noteCountText);
@@ -127,24 +127,26 @@ async function run() {
   const isSimpleBack = await evaluate("document.getElementById('simple-editor-card').style.display !== 'none'");
   console.log('9. After switching back to simple: mode =', modeAfterSimple, ', Simple visible =', isSimpleBack);
 
-  // 10. Test clicking a note chip to select it
+  // 10. Test clicking an annotation block to select it
   await evaluate(`
-    const chips = document.querySelectorAll('.simple-note-chip');
-    if (chips.length > 1) chips[1].click(); // click D4
+    const blocks = document.querySelectorAll('#annotation-lane .annotation-block');
+    if (blocks.length > 1) {
+      blocks[1].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 })); // select D4
+    }
   `);
   await wait(100);
   const selectedNotePitch = await evaluate("document.getElementById('input-simple-pitch').value");
-  console.log('10. Current pitch input after clicking D4 chip:', selectedNotePitch);
+  console.log('10. Current pitch input after clicking D4 block:', selectedNotePitch);
 
-  // 11. Test deleting first note chip (C4)
+  // 11. Test deleting selected note (D4) via simple delete button
   await evaluate(`
-    document.querySelector('.simple-note-chip .simple-note-del-btn').click();
+    document.getElementById('btn-simple-delete-note').click();
   `);
   await wait(100);
   const remainingNotes = await evaluate(`
-    Array.from(document.querySelectorAll('#simple-notes-ribbon .simple-note-letter')).map(el => el.textContent)
+    Array.from(document.querySelectorAll('#annotation-lane .annotation-block-pitch')).map(el => el.textContent)
   `);
-  console.log('11. Remaining notes after deleting C4:', remainingNotes);
+  console.log('11. Remaining notes after deleting D4:', remainingNotes);
 
   ws.close();
   edge.kill();

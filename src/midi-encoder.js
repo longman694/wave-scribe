@@ -55,17 +55,15 @@ function write32Bit(value) {
   ];
 }
 
+const textEncoder = new TextEncoder();
+
 /**
- * Converts a text string to ASCII byte array.
+ * Converts a text string to UTF-8 byte array.
  * @param {string} str
  * @returns {number[]}
  */
 function stringToBytes(str) {
-  const bytes = [];
-  for (let i = 0; i < str.length; i++) {
-    bytes.push(str.charCodeAt(i) & 0xff);
-  }
-  return bytes;
+  return Array.from(textEncoder.encode(str || ''));
 }
 
 /**
@@ -100,7 +98,7 @@ export function encodeMidi(state) {
   tempoTrackBytes.push(...writeVarLen(0));
   // Track Name: "Tempo Track"
   const track0Name = stringToBytes('Tempo Track');
-  tempoTrackBytes.push(0xff, 0x03, track0Name.length, ...track0Name);
+  tempoTrackBytes.push(0xff, 0x03, ...writeVarLen(track0Name.length), ...track0Name);
 
   // Time Signature: Meta Event 0xFF 0x58 0x04
   const num = timeSig[0] || 4;
@@ -124,26 +122,27 @@ export function encodeMidi(state) {
   tracks.forEach((track, trackIndex) => {
     const channel = trackIndex % 16;
     const trackBytes = [];
+    const trackId = (typeof track.id === 'string' && track.id) ? track.id : `track-${trackIndex}`;
 
-    // Track Name Meta Event
+    // Track Name Meta Event with VLQ length
     trackBytes.push(...writeVarLen(0));
     const nameBytes = stringToBytes(track.name || `Track ${trackIndex + 1}`);
-    trackBytes.push(0xff, 0x03, nameBytes.length, ...nameBytes);
+    trackBytes.push(0xff, 0x03, ...writeVarLen(nameBytes.length), ...nameBytes);
 
     // General MIDI Program Change based on track timbre
     let program = 0; // Acoustic Grand Piano
-    if (track.timbre === 'triangle' || track.timbre === 'sawtooth' || track.id.includes('bass')) {
+    if (track.timbre === 'triangle' || track.timbre === 'sawtooth' || trackId.includes('bass')) {
       program = 33; // Electric Bass (finger)
-    } else if (track.timbre === 'epiano' || track.id.includes('chord')) {
+    } else if (track.timbre === 'epiano' || trackId.includes('chord')) {
       program = 4; // Electric Piano 1 (Rhodes)
-    } else if (track.timbre === 'sine' || track.id.includes('melody') || track.id.includes('lead')) {
+    } else if (track.timbre === 'sine' || trackId.includes('melody') || trackId.includes('lead')) {
       program = 80; // Lead 1 (square/sine)
     }
     trackBytes.push(...writeVarLen(0));
     trackBytes.push(0xc0 | channel, program);
 
     // Extract notes belonging to this track
-    const trackNotes = notes.filter(n => n.trackId === track.id && !n.isRest && n.midi !== null && !isNaN(n.midi));
+    const trackNotes = notes.filter(n => n && (n.trackId === track.id || n.trackId === trackId || (!track.id && trackIndex === 0)) && !n.isRest && n.midi !== null && !isNaN(n.midi));
 
     // Convert notes to discrete events (Note On / Note Off)
     const midiEvents = [];

@@ -483,6 +483,18 @@
       gap: 16px;
       flex-wrap: wrap;
       z-index: 15;
+      transition: padding var(--transition-fast), gap var(--transition-fast);
+    }
+    .transport-bar.is-collapsed {
+      padding: 6px 16px;
+      gap: 10px;
+    }
+    .transport-bar.is-collapsed .transport-skip-btn,
+    .transport-bar.is-collapsed .card-detune,
+    .transport-bar.is-collapsed .card-looping,
+    .transport-bar.is-collapsed .badge-pitch-lock,
+    .transport-bar.is-collapsed .collapse-hide {
+      display: none !important;
     }
     .transport-group {
       display: flex;
@@ -634,7 +646,7 @@
       background: #0d0d10;
       overflow-x: auto;
       overflow-y: hidden;
-      cursor: crosshair;
+      cursor: text;
     }
     .waveform-viewport-wrapper.has-gutter .waveform-container {
       padding-right: 6px;
@@ -1663,10 +1675,10 @@
         <span id="icon-play-pause">▶</span>
       </button>
       <button class="btn btn-icon" id="btn-stop-rewind" title="Return to Beat Start / Loop A (Home)">⏮</button>
-      <button class="btn btn-icon btn-sm" id="btn-skip-back-5" title="Skip -5s (Shift+Left)">-5s</button>
-      <button class="btn btn-icon btn-sm" id="btn-skip-back-1" title="Skip -1s (Left)">-1s</button>
-      <button class="btn btn-icon btn-sm" id="btn-skip-forward-1" title="Skip +1s (Right)">+1s</button>
-      <button class="btn btn-icon btn-sm" id="btn-skip-forward-5" title="Skip +5s (Shift+Right)">+5s</button>
+      <button class="btn btn-icon btn-sm transport-skip-btn" id="btn-skip-back-5" title="Skip -5s (Shift+Left)">-5s</button>
+      <button class="btn btn-icon btn-sm transport-skip-btn" id="btn-skip-back-1" title="Skip -1s (Left)">-1s</button>
+      <button class="btn btn-icon btn-sm transport-skip-btn" id="btn-skip-forward-1" title="Skip +1s (Right)">+1s</button>
+      <button class="btn btn-icon btn-sm transport-skip-btn" id="btn-skip-forward-5" title="Skip +5s (Shift+Right)">+5s</button>
 
       <div class="time-readout-card">
         <span class="time-current mono" id="time-current">00:00.000</span>
@@ -1688,10 +1700,10 @@
           <button class="btn btn-sm preset-speed-btn btn-active" data-speed="1.0">1.0x</button>
           <button class="btn btn-sm preset-speed-btn" data-speed="1.25">1.25x</button>
         </div>
-        <span class="badge badge-emerald" title="Native Web Audio Pitch Preservation">Pitch Lock</span>
+        <span class="badge badge-emerald badge-pitch-lock" title="Native Web Audio Pitch Preservation">Pitch Lock</span>
       </div>
 
-      <div class="tempo-speed-card">
+      <div class="tempo-speed-card card-detune">
         <span class="control-label">Detune</span>
         <div class="slider-group">
           <input type="range" class="slider-input" id="slider-detune" min="-50" max="50" step="1" value="0">
@@ -1703,7 +1715,7 @@
     </div>
 
     <!-- Precision A-B Looping -->
-    <div class="transport-group">
+    <div class="transport-group card-looping">
       <div class="tempo-speed-card">
         <button class="btn btn-sm" id="btn-loop-toggle" title="Toggle Loop Mode (L)">Loop [Off]</button>
         <button class="btn btn-sm" id="btn-set-loop-a" title="Set Loop Start ( [ or I )">A [</button>
@@ -1717,14 +1729,14 @@
     <div class="transport-group">
       <div class="tempo-speed-card">
         <div class="slider-group" title="Reference Audio Volume, Mute &amp; Level">
-          <button class="btn btn-sm" id="btn-mute-audio" title="Toggle Reference Audio Mute (M)" style="padding: 2px 8px; font-size: 0.72rem; min-width: 48px;">Mute</button>
+          <button class="btn btn-sm" id="btn-mute-audio" title="Toggle Reference Audio Mute (M)" style="padding: 2px 8px; font-size: 0.72rem; min-width: 32px;">M</button>
           <span style="font-size: 0.72rem; color: var(--text-muted);">Audio</span>
           <input type="range" class="slider-input" id="slider-audio-volume" min="0" max="1" step="0.01" value="0.8">
           <span class="mono" id="val-audio-db" style="font-size: 0.7rem; color: var(--text-muted); min-width: 44px;">-1.9dB</span>
           <div class="vu-meter-bar" title="Audio RMS Level"><div class="vu-meter-fill" id="meter-audio-fill" style="width: 25%;"></div></div>
         </div>
         <div class="slider-group" title="Transcription Synth Volume, Mute &amp; Level">
-          <button class="btn btn-sm" id="btn-mute-synth" title="Toggle Transcription Synth Mute" style="padding: 2px 8px; font-size: 0.72rem; min-width: 48px;">Mute</button>
+          <button class="btn btn-sm" id="btn-mute-synth" title="Toggle Transcription Synth Mute" style="padding: 2px 8px; font-size: 0.72rem; min-width: 32px;">M</button>
           <span style="font-size: 0.72rem; color: var(--text-muted);">Synth</span>
           <input type="range" class="slider-input" id="slider-synth-volume" min="0" max="1" step="0.01" value="0.8">
           <span class="mono" id="val-synth-db" style="font-size: 0.7rem; color: var(--text-muted); min-width: 44px;">-1.9dB</span>
@@ -1746,31 +1758,33 @@
         <input type="number" id="input-bpm" min="20" max="320" value="120" class="mono" style="width: 52px; background: var(--bg-card); border: 1px solid var(--border-subtle); color: #fff; padding: 2px 4px; border-radius: var(--radius-sm); font-size: 0.8rem;">
         <button class="btn btn-sm" id="btn-tap-tempo" title="Tap Tempo along with playback (T)">TAP</button>
 
-        <span class="control-label" style="margin-left: 4px;">Time Sig</span>
-        <select id="select-time-signature">
-          <option value="4/4" selected>4/4</option>
-          <option value="3/4">3/4</option>
-          <option value="6/8">6/8</option>
-          <option value="5/4">5/4</option>
-          <option value="7/8">7/8</option>
-        </select>
+        <div class="collapse-hide" style="display: flex; align-items: center;">
+          <span class="control-label" style="margin-left: 4px;">Time Sig</span>
+          <select id="select-time-signature">
+            <option value="4/4" selected>4/4</option>
+            <option value="3/4">3/4</option>
+            <option value="6/8">6/8</option>
+            <option value="5/4">5/4</option>
+            <option value="7/8">7/8</option>
+          </select>
 
-        <span class="control-label" style="margin-left: 4px;">Snap</span>
-        <select id="select-snap-division">
-          <option value="off">Off</option>
-          <option value="1/4">1/4 Beat</option>
-          <option value="1/8">1/8</option>
-          <option value="1/16" selected>1/16</option>
-          <option value="1/8T">1/8 Triplet</option>
-        </select>
+          <span class="control-label" style="margin-left: 4px;">Snap</span>
+          <select id="select-snap-division">
+            <option value="off">Off</option>
+            <option value="1/4">1/4 Beat</option>
+            <option value="1/8">1/8</option>
+            <option value="1/16" selected>1/16</option>
+            <option value="1/8T">1/8 Triplet</option>
+          </select>
 
-        <span class="control-label" style="margin-left: 4px;">Swing</span>
-        <select id="select-swing" title="Swing Rhythm Groove (Task 2.3)">
-          <option value="0.5" selected>Straight (50%)</option>
-          <option value="0.58">Light (58%)</option>
-          <option value="0.66">Triplet (66%)</option>
-          <option value="0.75">Hard (75%)</option>
-        </select>
+          <span class="control-label" style="margin-left: 4px;">Swing</span>
+          <select id="select-swing" title="Swing Rhythm Groove (Task 2.3)">
+            <option value="0.5" selected>Straight (50%)</option>
+            <option value="0.58">Light (58%)</option>
+            <option value="0.66">Triplet (66%)</option>
+            <option value="0.75">Hard (75%)</option>
+          </select>
+        </div>
 
         <!-- Visual Metronome Pulse Indicator (Task 7.2) -->
         <div class="metronome-badge" id="metronome-indicator" title="Visual Metronome Pulse" style="display: flex; align-items: center; gap: 5px; padding: 2px 6px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-left: 4px;">
@@ -1779,7 +1793,7 @@
         </div>
 
         <!-- First Downbeat 1.1 Alignment (Task 1.2) -->
-        <div style="display: flex; align-items: center; gap: 5px; margin-left: 6px; padding-left: 6px; border-left: 1px solid var(--border-subtle);" title="Align Measure 1.1 downbeat with first note in audio">
+        <div class="collapse-hide" style="display: flex; align-items: center; gap: 5px; margin-left: 6px; padding-left: 6px; border-left: 1px solid var(--border-subtle);" title="Align Measure 1.1 downbeat with first note in audio">
           <button class="btn btn-sm" id="btn-set-beat-1" title="Lock Measure 1.1 to current playhead position" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 600;">Set Beat 1</button>
           <div style="display: flex; align-items: center; gap: 3px;">
             <span class="control-label" style="font-size: 0.7rem;">Offset</span>
@@ -1788,6 +1802,11 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Collapse / Expand Toolbar Button -->
+    <div class="transport-group" style="margin-left: auto;">
+      <button class="btn btn-sm btn-icon" id="btn-toggle-transport-collapse" title="Collapse Toolbar (Compact View)" style="min-width: 28px; font-size: 0.8rem; padding: 2px 6px;">⌃</button>
     </div>
   </section>
 
@@ -1802,7 +1821,7 @@
         </div>
         <div class="transport-group">
           <button class="btn btn-sm" id="btn-zoom-out" title="Zoom Out (-)">-</button>
-          <input type="range" class="slider-input" id="slider-waveform-zoom" min="0.5" max="30" step="0.5" value="1.0" style="width: 120px;">
+          <input type="range" class="slider-input" id="slider-waveform-zoom" min="0.5" max="30" step="0.1" value="1.0" style="width: 120px;">
           <button class="btn btn-sm" id="btn-zoom-in" title="Zoom In (+)">+</button>
           <button class="btn btn-sm" id="btn-zoom-fit" title="Fit to Screen">Fit</button>
           <button class="btn btn-sm" id="btn-eq-toggle" title="Parametric Equalizer Settings (Audio Track)" style="margin-left: 4px;">EQ</button>
@@ -1990,6 +2009,7 @@
           <button class="btn btn-sm" id="btn-add-chord-at-cursor" title="Insert Chord Marker (C)" style="display: none;">+ Chord Marker (C)</button>
           <button class="btn btn-sm btn-active" id="btn-tool-draw">Draw</button>
           <button class="btn btn-sm" id="btn-tool-erase">Erase</button>
+          <button class="btn btn-sm" id="btn-tool-move" title="Move Mode (Move notes, pan view, copy/paste/delete)">Move</button>
         </div>
       </div>
 
@@ -2287,6 +2307,8 @@
       btnAcceptConfirmNew: document.getElementById('btn-accept-confirm-new'),
 
       // Transport
+      transportBar: document.querySelector('.transport-bar'),
+      btnToggleTransportCollapse: document.getElementById('btn-toggle-transport-collapse'),
       btnPlayPause: document.getElementById('btn-play-pause'),
       iconPlayPause: document.getElementById('icon-play-pause'),
       btnStopRewind: document.getElementById('btn-stop-rewind'),
@@ -2416,6 +2438,7 @@
       badgeActiveTrack: document.getElementById('badge-active-track'),
       btnToolDraw: document.getElementById('btn-tool-draw'),
       btnToolErase: document.getElementById('btn-tool-erase'),
+      btnToolMove: document.getElementById('btn-tool-move'),
 
       // Mixer
       btnAddTrack: document.getElementById('btn-add-track'),
@@ -3485,11 +3508,11 @@
       if (el.btnMuteAudio) {
         if (audioMuted) {
           el.btnMuteAudio.classList.add('btn-rose-active');
-          el.btnMuteAudio.textContent = 'Muted';
+          el.btnMuteAudio.textContent = 'MUTED';
           el.btnMuteAudio.title = 'Reference Audio Muted (Click to Unmute)';
         } else {
           el.btnMuteAudio.classList.remove('btn-rose-active');
-          el.btnMuteAudio.textContent = 'Mute';
+          el.btnMuteAudio.textContent = 'M';
           el.btnMuteAudio.title = 'Mute Reference Audio (Hotkey: M)';
         }
       }
@@ -3497,11 +3520,11 @@
       if (el.btnMuteSynth) {
         if (synthMuted) {
           el.btnMuteSynth.classList.add('btn-rose-active');
-          el.btnMuteSynth.textContent = 'Muted';
+          el.btnMuteSynth.textContent = 'MUTED';
           el.btnMuteSynth.title = 'Transcription Synth Muted (Click to Unmute)';
         } else {
           el.btnMuteSynth.classList.remove('btn-rose-active');
-          el.btnMuteSynth.textContent = 'Mute';
+          el.btnMuteSynth.textContent = 'M';
           el.btnMuteSynth.title = 'Mute Transcription Synth';
         }
       }
@@ -4047,12 +4070,13 @@
     }
 
     // --- Phase 6: Interactive Piano Roll View Engine ---
-    let currentPianoRollTool = 'draw'; // 'draw' | 'erase'
+    let currentPianoRollTool = 'draw'; // 'draw' | 'erase' | 'move'
     let selectedNoteIds = new Set();
     let copiedNote = null;
     let copiedNotes = [];
     let hasCenteredPianoRoll = false;
     let pianoRollDragState = null;
+    let pianoRollPanClickOrigin = null;
 
     function centerPianoRollOnMiddleC() {
       if (!el.pianoRollGridContainer) return;
@@ -4579,9 +4603,41 @@
       }
     }
 
+    let isSyncingScroll = false;
+
+    function syncTimelineScroll(targetScrollLeft) {
+      if (typeof targetScrollLeft !== 'number' || isNaN(targetScrollLeft)) return;
+      const clamped = Math.max(0, targetScrollLeft);
+      isSyncingScroll = true;
+      try {
+        if (el.waveformViewport && Math.abs(el.waveformViewport.scrollLeft - clamped) > 0.5) {
+          el.waveformViewport.scrollLeft = clamped;
+        }
+        if (el.annotationViewport && el.annotationViewport.style.display !== 'none' && Math.abs(el.annotationViewport.scrollLeft - clamped) > 0.5) {
+          el.annotationViewport.scrollLeft = clamped;
+        }
+        if (el.pianoRollGridContainer && (!el.pianoRollCard || el.pianoRollCard.style.display !== 'none') && Math.abs(el.pianoRollGridContainer.scrollLeft - clamped) > 0.5) {
+          el.pianoRollGridContainer.scrollLeft = clamped;
+        }
+      } finally {
+        isSyncingScroll = false;
+      }
+    }
+
     function updateEditorModeView() {
       const state = store.getState();
       const isSimple = state.view.editorMode === 'simple';
+      const currentZoom = (state.view && typeof state.view.zoom === 'number') ? state.view.zoom : 1.0;
+
+      // Capture scrollLeft from whichever viewport was active/visible before mode change
+      let referenceScrollLeft = 0;
+      if (el.pianoRollCard && el.pianoRollCard.style.display !== 'none' && el.pianoRollGridContainer) {
+        referenceScrollLeft = el.pianoRollGridContainer.scrollLeft;
+      } else if (el.waveformViewport) {
+        referenceScrollLeft = el.waveformViewport.scrollLeft;
+      } else if (el.annotationViewport) {
+        referenceScrollLeft = el.annotationViewport.scrollLeft;
+      }
 
       // In Simple Mode: Annotation Track is visible beneath waveform, waveform gutter is hidden
       // In Piano Roll Mode: Annotation Track is hidden, waveform gutter aligns with piano keys gutter
@@ -4604,15 +4660,14 @@
       if (el.btnModeSimple) el.btnModeSimple.classList.toggle('btn-active', isSimple);
       if (el.btnModePianoroll) el.btnModePianoroll.classList.toggle('btn-active', !isSimple);
 
+      // Force track styles to current zoom level across all viewports
+      applyZoomStyles(currentZoom);
+
       renderTimeRulerGrid();
       renderWaveform();
       renderLoopOverlay();
 
       if (!isSimple) {
-        if (el.pianoRollGridContent) {
-          const zoom = state.view.zoom || 1.0;
-          el.pianoRollGridContent.style.width = `${Math.round(zoom * 100)}%`;
-        }
         renderPianoRollGrid();
         if (!hasCenteredPianoRoll) {
           hasCenteredPianoRoll = true;
@@ -4621,6 +4676,18 @@
       } else {
         renderAnnotationTrack();
       }
+
+      // Synchronize horizontal scroll across viewports immediately and on next animation frame (post-reflow)
+      syncTimelineScroll(referenceScrollLeft);
+      requestAnimationFrame(() => {
+        syncTimelineScroll(referenceScrollLeft);
+        updatePlayheadPosition(state.playback ? state.playback.currentTime : 0, state.audio ? state.audio.duration : 30);
+        if (isSimple) {
+          renderAnnotationTrack();
+        } else {
+          renderPianoRollGrid();
+        }
+      });
     }
 
     function renderSimpleNotesRibbon() {
@@ -5091,9 +5158,18 @@
           ? audioElement.currentTime
           : (state.playback ? state.playback.currentTime : 0);
         const curZoom = (state.view && typeof state.view.zoom === 'number') ? state.view.zoom : 1.0;
-        const curScrollLeft = el.waveformViewport ? el.waveformViewport.scrollLeft : 0;
-        const curPianoRollScrollTop = el.pianoRollGridContainer ? el.pianoRollGridContainer.scrollTop : 0;
         const curEditorMode = (state.view && state.view.editorMode) ? state.view.editorMode : 'simple';
+
+        let curScrollLeft = 0;
+        if ((curEditorMode === 'pianoroll' || curEditorMode === 'piano-roll') && el.pianoRollCard && el.pianoRollCard.style.display !== 'none' && el.pianoRollGridContainer) {
+          curScrollLeft = el.pianoRollGridContainer.scrollLeft;
+        } else if (el.waveformViewport) {
+          curScrollLeft = el.waveformViewport.scrollLeft;
+        } else if (el.annotationViewport) {
+          curScrollLeft = el.annotationViewport.scrollLeft;
+        }
+
+        const curPianoRollScrollTop = el.pianoRollGridContainer ? el.pianoRollGridContainer.scrollTop : 0;
 
         const viewExtra = {
           currentTime: curTime,
@@ -5162,21 +5238,18 @@
       const state = store.getState();
       const duration = state.audio.duration || 30;
 
-      if (el.waveformViewport) {
-        const trackW = el.waveformTrack ? el.waveformTrack.clientWidth : el.waveformViewport.clientWidth;
-        const viewW = el.waveformViewport.clientWidth;
-        const targetScroll = calculateHomeViewportScroll(time, duration, trackW, viewW);
+      const activeViewport = (state.view.editorMode === 'piano-roll' && el.pianoRollGridContainer)
+        ? el.pianoRollGridContainer
+        : el.waveformViewport;
+      const track = (state.view.editorMode === 'piano-roll' && el.pianoRollGridContent)
+        ? el.pianoRollGridContent
+        : (el.waveformTrack || el.annotationLane || activeViewport);
 
-        el.waveformViewport.scrollLeft = targetScroll;
-        if (el.annotationViewport) {
-          el.annotationViewport.scrollLeft = targetScroll;
-        }
-        if (el.pianoRollGridContainer) {
-          const prTrackW = el.pianoRollGridContent ? el.pianoRollGridContent.clientWidth : trackW;
-          const prViewW = el.pianoRollGridContainer.clientWidth || viewW;
-          const prTargetScroll = calculateHomeViewportScroll(time, duration, prTrackW, prViewW);
-          el.pianoRollGridContainer.scrollLeft = prTargetScroll;
-        }
+      if (activeViewport) {
+        const trackW = track ? track.clientWidth : activeViewport.clientWidth;
+        const viewW = activeViewport.clientWidth || 1000;
+        const targetScroll = calculateHomeViewportScroll(time, duration, trackW, viewW);
+        syncTimelineScroll(targetScroll);
       }
     }
 
@@ -5225,6 +5298,34 @@
     el.btnResetDetune.addEventListener('click', () => {
       store.setDetuneCents(0);
     });
+
+    // Toolbar Collapse Toggle
+    function setTransportCollapsed(collapsed) {
+      if (!el.transportBar) return;
+      el.transportBar.classList.toggle('is-collapsed', Boolean(collapsed));
+      if (el.btnToggleTransportCollapse) {
+        el.btnToggleTransportCollapse.textContent = collapsed ? '⌄' : '⌃';
+        el.btnToggleTransportCollapse.title = collapsed
+          ? 'Expand Toolbar (Full View)'
+          : 'Collapse Toolbar (Compact View)';
+      }
+      try {
+        localStorage.setItem('wavescribe_transport_collapsed', collapsed ? 'true' : 'false');
+      } catch (_) {}
+    }
+
+    if (el.btnToggleTransportCollapse) {
+      el.btnToggleTransportCollapse.addEventListener('click', () => {
+        const isCollapsed = el.transportBar ? el.transportBar.classList.contains('is-collapsed') : false;
+        setTransportCollapsed(!isCollapsed);
+      });
+      // Restore persisted collapsed preference if saved
+      try {
+        if (localStorage.getItem('wavescribe_transport_collapsed') === 'true') {
+          setTransportCollapsed(true);
+        }
+      } catch (_) {}
+    }
 
     // Looping
     el.btnLoopToggle.addEventListener('click', () => store.toggleLoop());
@@ -5424,7 +5525,9 @@
       const state = store.getState();
       const oldZoom = (state.view && typeof state.view.zoom === 'number') ? state.view.zoom : 1.0;
       const clamped = Math.max(0.5, Math.min(30, zoom));
-      if (Math.abs(clamped - oldZoom) < 0.001) return;
+
+      const isForce = Boolean(anchor && (anchor.type === 'restore' || anchor.force === true));
+      if (!isForce && Math.abs(clamped - oldZoom) < 0.001) return;
 
       if (anchor && anchor.type === 'restore') {
         store.setZoom(clamped);
@@ -5434,6 +5537,12 @@
         if (store.getState().view.editorMode !== 'simple') {
           renderPianoRollGrid();
         }
+        if (typeof anchor.scrollLeft === 'number') {
+          syncTimelineScroll(anchor.scrollLeft);
+        }
+        const curTime = (state.playback && typeof state.playback.currentTime === 'number') ? state.playback.currentTime : 0;
+        const duration = (state.audio && state.audio.duration > 0) ? state.audio.duration : 30;
+        updatePlayheadPosition(curTime, duration);
         return;
       }
 
@@ -5495,24 +5604,14 @@
       }
 
       // Synchronize horizontal scroll across all timeline viewports
-      if (activeViewport) {
-        activeViewport.scrollLeft = targetScrollLeft;
-      }
-      if (el.waveformViewport && el.waveformViewport !== activeViewport) {
-        el.waveformViewport.scrollLeft = targetScrollLeft;
-      }
-      if (el.pianoRollGridContainer && el.pianoRollGridContainer !== activeViewport) {
-        el.pianoRollGridContainer.scrollLeft = targetScrollLeft;
-      }
-      if (el.annotationViewport && el.annotationViewport !== activeViewport) {
-        el.annotationViewport.scrollLeft = targetScrollLeft;
-      }
+      syncTimelineScroll(targetScrollLeft);
 
       renderTimelineTracks();
       renderAnnotationTrack();
       if (store.getState().view.editorMode !== 'simple') {
         renderPianoRollGrid();
       }
+      updatePlayheadPosition(state.playback ? state.playback.currentTime : 0, duration);
       if (typeof scheduleAutoSave === 'function') {
         scheduleAutoSave();
       }
@@ -5531,7 +5630,6 @@
       updateZoomView(1.0, { type: 'fit' });
     });
 
-    let isSyncingScroll = false;
     let pianoRollScrollRaf = null;
     function schedulePianoRollScrollRender() {
       if (pianoRollScrollRaf) return;
@@ -5557,10 +5655,10 @@
       if (!isSyncingScroll) {
         isSyncingScroll = true;
         try {
-          if (el.annotationViewport && Math.abs(el.annotationViewport.scrollLeft - el.waveformViewport.scrollLeft) > 1) {
+          if (el.annotationViewport && el.annotationViewport.style.display !== 'none' && Math.abs(el.annotationViewport.scrollLeft - el.waveformViewport.scrollLeft) > 1) {
             el.annotationViewport.scrollLeft = el.waveformViewport.scrollLeft;
           }
-          if (el.pianoRollGridContainer && Math.abs(el.pianoRollGridContainer.scrollLeft - el.waveformViewport.scrollLeft) > 1) {
+          if (el.pianoRollGridContainer && (!el.pianoRollCard || el.pianoRollCard.style.display !== 'none') && Math.abs(el.pianoRollGridContainer.scrollLeft - el.waveformViewport.scrollLeft) > 1) {
             el.pianoRollGridContainer.scrollLeft = el.waveformViewport.scrollLeft;
           }
         } finally {
@@ -5578,7 +5676,7 @@
             if (el.waveformViewport && Math.abs(el.waveformViewport.scrollLeft - el.annotationViewport.scrollLeft) > 1) {
               el.waveformViewport.scrollLeft = el.annotationViewport.scrollLeft;
             }
-            if (el.pianoRollGridContainer && Math.abs(el.pianoRollGridContainer.scrollLeft - el.annotationViewport.scrollLeft) > 1) {
+            if (el.pianoRollGridContainer && (!el.pianoRollCard || el.pianoRollCard.style.display !== 'none') && Math.abs(el.pianoRollGridContainer.scrollLeft - el.annotationViewport.scrollLeft) > 1) {
               el.pianoRollGridContainer.scrollLeft = el.annotationViewport.scrollLeft;
             }
           } finally {
@@ -5596,7 +5694,7 @@
             if (el.waveformViewport && Math.abs(el.waveformViewport.scrollLeft - el.pianoRollGridContainer.scrollLeft) > 1) {
               el.waveformViewport.scrollLeft = el.pianoRollGridContainer.scrollLeft;
             }
-            if (el.annotationViewport && Math.abs(el.annotationViewport.scrollLeft - el.pianoRollGridContainer.scrollLeft) > 1) {
+            if (el.annotationViewport && el.annotationViewport.style.display !== 'none' && Math.abs(el.annotationViewport.scrollLeft - el.pianoRollGridContainer.scrollLeft) > 1) {
               el.annotationViewport.scrollLeft = el.pianoRollGridContainer.scrollLeft;
             }
           } finally {
@@ -5683,7 +5781,7 @@
           return;
         }
       }
-      el.waveformViewport.style.cursor = 'crosshair';
+      el.waveformViewport.style.cursor = 'text';
     });
 
     // Shift key down/up cursor responsiveness
@@ -5697,7 +5795,7 @@
     window.addEventListener('keyup', (e) => {
       if (e.key === 'Shift' && !isPanningViewport && !isWaveformMouseDown) {
         if (el.waveformViewport) {
-          el.waveformViewport.style.cursor = 'crosshair';
+          el.waveformViewport.style.cursor = 'text';
         }
       }
     });
@@ -6015,12 +6113,21 @@
     // Global mouseup for all drag modes
     window.addEventListener('mouseup', (e) => {
       if (isPanningViewport) {
+        if (pianoRollPanClickOrigin && panSource === 'pianoroll') {
+          const movedDist = Math.hypot(e.clientX - pianoRollPanClickOrigin.x, e.clientY - pianoRollPanClickOrigin.y);
+          if (movedDist < 4) {
+            selectedNoteIds.clear();
+            store.setSelectedNoteId(null);
+            renderPianoRollGrid();
+          }
+        }
+        pianoRollPanClickOrigin = null;
         isPanningViewport = false;
         panSource = null;
-        el.waveformViewport.style.cursor = e.shiftKey ? 'grab' : 'crosshair';
+        el.waveformViewport.style.cursor = e.shiftKey ? 'grab' : 'text';
         if (el.annotationViewport) el.annotationViewport.style.cursor = '';
-        if (el.canvasPianoRoll) el.canvasPianoRoll.style.cursor = '';
-        if (el.pianoRollGridContainer) el.pianoRollGridContainer.style.cursor = '';
+        if (el.canvasPianoRoll) el.canvasPianoRoll.style.cursor = (currentPianoRollTool === 'move') ? 'default' : '';
+        if (el.pianoRollGridContainer) el.pianoRollGridContainer.style.cursor = (currentPianoRollTool === 'move') ? 'default' : '';
         if (el.pianoKeysGutter) el.pianoKeysGutter.style.cursor = '';
         if (el.simpleEditorCard) el.simpleEditorCard.style.cursor = '';
       }
@@ -7197,6 +7304,10 @@
           reader.onload = (evt) => {
             const success = store.importSessionJSON(evt.target.result);
             if (success) {
+              const state = store.getState();
+              const zoom = (state.view && typeof state.view.zoom === 'number') ? state.view.zoom : 1.0;
+              updateZoomView(zoom, { type: 'restore', force: true });
+              updateEditorModeView();
               renderMixerStrips();
               renderSimpleNotesRibbon();
               renderAnnotationTrack();
@@ -7268,19 +7379,36 @@
     }
 
     // --- Piano Roll Tools & Interactive Mouse Actions (Tasks 6.1, 6.2, 6.3) ---
+    function setPianoRollTool(tool) {
+      currentPianoRollTool = tool;
+      if (el.btnToolDraw) el.btnToolDraw.classList.toggle('btn-active', tool === 'draw');
+      if (el.btnToolErase) el.btnToolErase.classList.toggle('btn-active', tool === 'erase');
+      if (el.btnToolMove) el.btnToolMove.classList.toggle('btn-active', tool === 'move');
+      if (tool !== 'draw') {
+        pianoRollHoverPreview = null;
+        lastHoverAuditionMidi = null;
+        document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
+        renderPianoRollGrid();
+      }
+      if (el.pianoRollGridContainer) {
+        if (tool === 'move') {
+          el.pianoRollGridContainer.style.cursor = 'default';
+        } else if (tool === 'erase') {
+          el.pianoRollGridContainer.style.cursor = 'default';
+        } else {
+          el.pianoRollGridContainer.style.cursor = 'crosshair';
+        }
+      }
+    }
+
     if (el.btnToolDraw) {
-      el.btnToolDraw.addEventListener('click', () => {
-        currentPianoRollTool = 'draw';
-        el.btnToolDraw.classList.add('btn-active');
-        if (el.btnToolErase) el.btnToolErase.classList.remove('btn-active');
-      });
+      el.btnToolDraw.addEventListener('click', () => setPianoRollTool('draw'));
     }
     if (el.btnToolErase) {
-      el.btnToolErase.addEventListener('click', () => {
-        currentPianoRollTool = 'erase';
-        el.btnToolErase.classList.add('btn-active');
-        if (el.btnToolDraw) el.btnToolDraw.classList.remove('btn-active');
-      });
+      el.btnToolErase.addEventListener('click', () => setPianoRollTool('erase'));
+    }
+    if (el.btnToolMove) {
+      el.btnToolMove.addEventListener('click', () => setPianoRollTool('move'));
     }
 
     if (el.canvasPianoRoll && el.pianoRollGridContainer) {
@@ -7318,6 +7446,19 @@
 
         if (currentPianoRollTool === 'erase') {
           el.pianoRollGridContainer.style.cursor = hit ? 'pointer' : 'default';
+          if (pianoRollHoverPreview) {
+            pianoRollHoverPreview = null;
+            document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
+            renderPianoRollGrid();
+          }
+        } else if (currentPianoRollTool === 'move') {
+          if (hit && hit.isRightEdge) {
+            el.pianoRollGridContainer.style.cursor = 'ew-resize';
+          } else if (hit) {
+            el.pianoRollGridContainer.style.cursor = 'move';
+          } else {
+            el.pianoRollGridContainer.style.cursor = 'default';
+          }
           if (pianoRollHoverPreview) {
             pianoRollHoverPreview = null;
             document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
@@ -7554,6 +7695,94 @@
             renderPianoRollGrid();
             renderSimpleNotesRibbon();
             renderAnnotationTrack();
+          }
+          return;
+        }
+
+        // Move tool (move notes, adjust duration, 2D viewport pan on empty space, no draw/insert/preview)
+        if (currentPianoRollTool === 'move') {
+          if (e.shiftKey && hit) {
+            if (selectedNoteIds.has(hit.note.id)) {
+              selectedNoteIds.delete(hit.note.id);
+              if (store.getState().view.selectedNoteId === hit.note.id) {
+                store.setSelectedNoteId(selectedNoteIds.size > 0 ? Array.from(selectedNoteIds)[0] : null);
+              }
+            } else {
+              selectedNoteIds.add(hit.note.id);
+              store.setSelectedNoteId(hit.note.id);
+              playNotePreview(hit.note.midi, 0.25);
+            }
+            renderPianoRollGrid();
+            return;
+          }
+
+          if (e.shiftKey && !hit) {
+            pianoRollDragState = {
+              type: 'marquee',
+              startX: x,
+              startY: y,
+              initialSelectedNoteIds: new Set(selectedNoteIds)
+            };
+            renderPianoRollGrid();
+            return;
+          }
+
+          if (hit && hit.isRightEdge) {
+            pianoRollDragState = {
+              type: 'resize',
+              targetNote: hit.note,
+              origDuration: hit.note.duration,
+              startX: x,
+              startTime: clickTime
+            };
+            selectedNoteIds = new Set([hit.note.id]);
+            store.setSelectedNoteId(hit.note.id);
+            renderPianoRollGrid();
+            return;
+          }
+
+          if (hit && !hit.isRightEdge) {
+            if (!selectedNoteIds.has(hit.note.id)) {
+              selectedNoteIds = new Set([hit.note.id]);
+              store.setSelectedNoteId(hit.note.id);
+            }
+            const origNotesMap = new Map();
+            state.notes.forEach(n => {
+              if (selectedNoteIds.has(n.id)) {
+                origNotesMap.set(n.id, { ...n });
+              }
+            });
+            pianoRollDragState = {
+              type: 'move',
+              targetNote: hit.note,
+              origNote: { ...hit.note },
+              origNotesMap,
+              startX: x,
+              startY: y,
+              startTime: clickTime,
+              startMidi: clickMidi,
+              hasMoved: false,
+              lastAuditionedMidi: hit.note.midi,
+              finalDt: 0,
+              finalDMidi: 0
+            };
+            playNotePreview(hit.note.midi, 0.25);
+            renderPianoRollGrid();
+            return;
+          }
+
+          // Left-click on empty space: pan viewport across X and Y (like middle-click)
+          if (!hit && !e.shiftKey) {
+            isPanningViewport = true;
+            panSource = 'pianoroll';
+            panStartX = e.clientX;
+            panStartY = e.clientY;
+            panStartScrollLeft = el.pianoRollGridContainer ? el.pianoRollGridContainer.scrollLeft : 0;
+            panStartScrollTop = el.pianoRollGridContainer ? el.pianoRollGridContainer.scrollTop : 0;
+            el.canvasPianoRoll.style.cursor = 'grabbing';
+            if (el.pianoRollGridContainer) el.pianoRollGridContainer.style.cursor = 'grabbing';
+            pianoRollPanClickOrigin = { x: e.clientX, y: e.clientY };
+            return;
           }
           return;
         }
@@ -8325,11 +8554,12 @@
         // 1. Restore editor mode if specified
         if (targetEditorMode) {
           store.setEditorMode(targetEditorMode);
+          updateEditorModeView();
         }
 
         // 2. Restore zoom level
         if (typeof targetZoom === 'number' && targetZoom >= 0.5) {
-          updateZoomView(targetZoom);
+          updateZoomView(targetZoom, { type: 'restore', force: true });
         }
 
         // 3. Restore audio blob from IndexedDB if available
@@ -8342,19 +8572,17 @@
 
         // 4. Re-apply target zoom and cursor position after audio ingestion
         if (typeof targetZoom === 'number' && targetZoom >= 0.5) {
-          updateZoomView(targetZoom);
+          updateZoomView(targetZoom, { type: 'restore', force: true });
         }
 
         if (typeof targetCurrentTime === 'number' && targetCurrentTime >= 0) {
           seekAudio(targetCurrentTime, true);
         }
 
-        // 5. Restore viewport scroll positions
-        requestAnimationFrame(() => {
+        // 5. Restore viewport scroll positions safely across reflow
+        const applyScrollRestoration = () => {
           if (typeof targetScrollLeft === 'number' && targetScrollLeft >= 0) {
-            if (el.waveformViewport) el.waveformViewport.scrollLeft = targetScrollLeft;
-            if (el.annotationViewport) el.annotationViewport.scrollLeft = targetScrollLeft;
-            if (el.pianoRollGridContainer) el.pianoRollGridContainer.scrollLeft = targetScrollLeft;
+            syncTimelineScroll(targetScrollLeft);
           } else if (targetCurrentTime > 0) {
             scrollPlayheadIntoView(targetCurrentTime);
           }
@@ -8363,7 +8591,16 @@
             if (el.pianoRollGridContainer) el.pianoRollGridContainer.scrollTop = targetPianoRollScrollTop;
             if (el.pianoKeysGutter) el.pianoKeysGutter.scrollTop = targetPianoRollScrollTop;
           }
-        });
+          const curTime = (store.getState().playback && typeof store.getState().playback.currentTime === 'number') ? store.getState().playback.currentTime : 0;
+          const duration = (store.getState().audio && store.getState().audio.duration > 0) ? store.getState().audio.duration : 30;
+          updatePlayheadPosition(curTime, duration);
+        };
+
+        applyScrollRestoration();
+        await new Promise(resolve => requestAnimationFrame(() => {
+          applyScrollRestoration();
+          resolve();
+        }));
       } catch (err) {
         console.warn('Session auto-restore error:', err);
       } finally {
@@ -8389,6 +8626,8 @@
       audioElement,
       handleAudioFileSelected,
       updateZoomView,
+      updateEditorModeView,
+      syncTimelineScroll,
       seekAudio,
       togglePlayback,
       saveCurrentStateAndPosition,
@@ -8417,7 +8656,9 @@
       renderPianoKeys,
       getNoteAtPianoRollPos,
       getPianoRollTool: () => currentPianoRollTool,
-      setPianoRollTool: (t) => { if (t === 'draw') el.btnToolDraw.click(); else el.btnToolErase.click(); },
+      setPianoRollTool: (t) => setPianoRollTool(t),
+      setTransportCollapsed: (c) => setTransportCollapsed(c),
+      isTransportCollapsed: () => Boolean(el.transportBar && el.transportBar.classList.contains('is-collapsed')),
       getSelectedNoteIds: () => selectedNoteIds,
       setSelectedNoteIds: (set) => { selectedNoteIds = new Set(set); },
       getCopiedNotes: () => copiedNotes,

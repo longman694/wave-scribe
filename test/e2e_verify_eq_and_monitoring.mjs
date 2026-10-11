@@ -138,8 +138,8 @@ server.listen(PORT, async () => {
     assert.equal(monitoringUi.hasBtnMuteAudio, true, '#btn-mute-audio must exist');
     assert.equal(monitoringUi.hasBtnMuteSynth, true, '#btn-mute-synth must exist');
     assert.equal(monitoringUi.selectModeHidden, true, 'monitoring select dropdown must be removed from visible layout');
-    assert.equal(monitoringUi.audioBtnText, 'Mute');
-    assert.equal(monitoringUi.synthBtnText, 'Mute');
+    assert.equal(monitoringUi.audioBtnText, 'M');
+    assert.equal(monitoringUi.synthBtnText, 'M');
     console.log('✅ Mute buttons present and monitoring dropdown successfully hidden');
 
     // Test Audio Mute Toggle
@@ -158,7 +158,7 @@ server.listen(PORT, async () => {
     `);
     assert.equal(afterAudioMute.audioMuted, true, 'audioMuted must be true after clicking Mute');
     assert.equal(afterAudioMute.hasRoseClass, true, 'audio mute button must have .btn-rose-active');
-    assert.equal(afterAudioMute.text, 'Muted');
+    assert.equal(afterAudioMute.text, 'MUTED');
     console.log('✅ Audio Mute toggle sets state and turns .btn-rose-active');
 
     // Unmute Audio
@@ -176,7 +176,7 @@ server.listen(PORT, async () => {
     `);
     assert.equal(afterAudioUnmute.audioMuted, false, 'audioMuted must be false after unmuting');
     assert.equal(afterAudioUnmute.hasRoseClass, false);
-    assert.equal(afterAudioUnmute.text, 'Mute');
+    assert.equal(afterAudioUnmute.text, 'M');
     console.log('✅ Audio Unmute reverts state and removes .btn-rose-active');
 
     // Test Synth Mute Toggle
@@ -194,7 +194,7 @@ server.listen(PORT, async () => {
     `);
     assert.equal(afterSynthMute.synthMuted, true, 'synthMuted must be true after clicking Mute');
     assert.equal(afterSynthMute.hasRoseClass, true, 'synth mute button must have .btn-rose-active');
-    assert.equal(afterSynthMute.text, 'Muted');
+    assert.equal(afterSynthMute.text, 'MUTED');
     console.log('✅ Synth Mute toggle sets state and turns .btn-rose-active');
 
     // Unmute Synth

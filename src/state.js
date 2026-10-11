@@ -187,6 +187,104 @@ export function quantizeTime(timeSeconds, bpm, snapDivision, gridOffset = 0, swi
 }
 
 /**
+ * Snaps a target time to adjacent note edges (previous note end, next note start) or falls back to grid quantization.
+ * Prioritizes neighbor note boundaries within a dynamic magnetic threshold (screen pixels or musical fraction).
+ *
+ * @param {number} timeSeconds - Target time in seconds to quantize/snap
+ * @param {number} bpm - Beats per minute
+ * @param {string} snapDivision - Grid division ('1/16', '1/8', '1/4', '1/8T', 'off')
+ * @param {number} [gridOffset=0] - Beat 1 offset in seconds
+ * @param {number} [swingFactor=0.5] - Swing factor (0.5 straight to 0.85 hard)
+ * @param {Object} [options={}] - Snapping options
+ * @param {Array} [options.notes=[]] - Existing notes to test against
+ * @param {string} [options.activeTrackId=null] - Restricts snapping to notes on this track
+ * @param {Set|Array} [options.excludeNoteIds=null] - Notes to exclude (e.g. note being moved/resized)
+ * @param {number} [options.pxPerSecond=null] - Viewport horizontal scaling for screen-pixel threshold
+ * @param {number} [options.thresholdPx=12] - Magnetic snap radius in screen pixels (default 12px)
+ * @param {string} [options.targetType='point'] - 'start', 'end', or 'point'
+ * @param {number} [options.noteDuration=0] - Duration of note being placed/moved
+ * @returns {{ time: number, snappedToEdge: boolean, edgeTime: number|null }}
+ */
+export function snapTimeToNotesAndGrid(timeSeconds, bpm, snapDivision, gridOffset = 0, swingFactor = 0.5, options = {}) {
+  if (snapDivision === 'off' || !snapDivision || bpm <= 0) {
+    return { time: timeSeconds, snappedToEdge: false, edgeTime: null };
+  }
+
+  const notes = options.notes || [];
+  const excludeIds = options.excludeNoteIds ? new Set(options.excludeNoteIds) : null;
+  const activeTrackId = options.activeTrackId || null;
+  const targetType = options.targetType || 'point';
+  const noteDuration = Number(options.noteDuration) || 0;
+
+  // Calculate magnetic threshold in seconds
+  let thresholdSeconds = 0;
+  if (typeof options.pxPerSecond === 'number' && options.pxPerSecond > 0) {
+    const thresholdPx = typeof options.thresholdPx === 'number' ? options.thresholdPx : 12;
+    thresholdSeconds = thresholdPx / options.pxPerSecond;
+  } else {
+    // Fallback: 1/32 note duration or 0.075s
+    const secondsPerBeat = 60 / bpm;
+    thresholdSeconds = Math.min(0.075, secondsPerBeat / 8);
+  }
+
+  let bestEdgeTime = null;
+  let bestDist = Infinity;
+
+  // Scan candidate notes for edges
+  for (let i = 0; i < notes.length; i++) {
+    const n = notes[i];
+    if (excludeIds && excludeIds.has(n.id)) continue;
+    if (activeTrackId && n.trackId && n.trackId !== activeTrackId) continue;
+
+    const start = n.startTime;
+    const end = n.startTime + n.duration;
+
+    // 1. Previous note end: snap target time to the end of an existing note
+    const distToEnd = Math.abs(timeSeconds - end);
+    if (distToEnd < bestDist && distToEnd <= thresholdSeconds) {
+      bestDist = distToEnd;
+      bestEdgeTime = end;
+    }
+
+    // 2. Next note start: snap target time to the start of an existing note
+    const distToStart = Math.abs(timeSeconds - start);
+    if (distToStart < bestDist && distToStart <= thresholdSeconds) {
+      bestDist = distToStart;
+      bestEdgeTime = start;
+    }
+
+    // 3. If targetType === 'start' and noteDuration > 0:
+    // Placed/moved note's end aligns with next note's start (abutting note end)
+    if (targetType === 'start' && noteDuration > 0) {
+      const abutStart = start - noteDuration;
+      if (abutStart >= 0) {
+        const distToAbut = Math.abs(timeSeconds - abutStart);
+        if (distToAbut < bestDist && distToAbut <= thresholdSeconds) {
+          bestDist = distToAbut;
+          bestEdgeTime = abutStart;
+        }
+      }
+    }
+  }
+
+  if (bestEdgeTime !== null) {
+    return {
+      time: Math.max(0, Math.round(bestEdgeTime * 10000) / 10000),
+      snappedToEdge: true,
+      edgeTime: Math.max(0, Math.round(bestEdgeTime * 10000) / 10000)
+    };
+  }
+
+  // Fallback to standard grid quantization
+  const gridTime = quantizeTime(timeSeconds, bpm, snapDivision, gridOffset, swingFactor);
+  return {
+    time: gridTime,
+    snappedToEdge: false,
+    edgeTime: null
+  };
+}
+
+/**
  * Calculates the home rewind position in seconds.
  * Returns Line A (loop.start) if loop is set and enabled, otherwise beat start line (gridOffset, defaulting to 0).
  * @param {Object} state - The application state object

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Store, quantizeTime, noteNameToMidi, midiToNoteName, calculateHomePosition, calculateHomeViewportScroll } from '../src/state.js';
+import { Store, quantizeTime, snapTimeToNotesAndGrid, noteNameToMidi, midiToNoteName, calculateHomePosition, calculateHomeViewportScroll } from '../src/state.js';
 import { saveSessionToLocalStorage, loadSessionFromLocalStorage } from '../src/storage.js';
 
 test('UX Improvements & Piano Roll State Logic', async (t) => {
@@ -305,6 +305,78 @@ test('UX Improvements & Piano Roll State Logic', async (t) => {
     store.redo();
     assert.equal(store.getState().notes.length, 1);
     assert.equal(store.getState().notes[0].duration, 1.25);
+  });
+
+  await t.test('snapTimeToNotesAndGrid snaps 1/32 notes and triplets flush to previous note end under 1/16 snap', () => {
+    const bpm = 120; // 0.5s per beat, 1/16 is 0.125s, 1/32 is 0.0625s
+    const notes = [
+      { id: 'note-1', trackId: 'track-1', startTime: 0, duration: 0.0625 } // 1/32 note ending at 0.0625s
+    ];
+
+    // Under 1/16 snap, standard quantizeTime rounds 0.064s to 0.125s (skipping 0.0625s)
+    const standardGrid = quantizeTime(0.064, bpm, '1/16');
+    assert.equal(standardGrid, 0.125);
+
+    // With adjacent note snapping:
+    const snapped = snapTimeToNotesAndGrid(0.064, bpm, '1/16', 0, 0.5, {
+      notes,
+      activeTrackId: 'track-1',
+      targetType: 'start'
+    });
+    assert.equal(snapped.snappedToEdge, true);
+    assert.equal(snapped.time, 0.0625, 'Snaps directly to end of previous 1/32 note');
+  });
+
+  await t.test('snapTimeToNotesAndGrid snaps triplets consecutively under 1/16 snap', () => {
+    const bpm = 120; // 0.5s per beat, 1/8T is ~0.3333s
+    const notes = [
+      { id: 'triplet-1', trackId: 'track-melody', startTime: 0, duration: 0.3333 }
+    ];
+
+    // Placing next triplet near 0.34s snaps to 0.3333s
+    const snapped = snapTimeToNotesAndGrid(0.34, bpm, '1/16', 0, 0.5, {
+      notes,
+      activeTrackId: 'track-melody',
+      targetType: 'start'
+    });
+    assert.equal(snapped.snappedToEdge, true);
+    assert.equal(snapped.time, 0.3333, 'Snaps to end of previous triplet note');
+
+    // Far from note edges, falls back to standard 1/16 grid
+    const farSnap = snapTimeToNotesAndGrid(1.02, bpm, '1/16', 0, 0.5, {
+      notes,
+      activeTrackId: 'track-melody',
+      targetType: 'start'
+    });
+    assert.equal(farSnap.snappedToEdge, false);
+    assert.equal(farSnap.time, 1.0, 'Falls back to 1/16 grid line');
+  });
+
+  await t.test('snapTimeToNotesAndGrid snaps note resize end to next note start and respects bypass', () => {
+    const bpm = 120;
+    const notes = [
+      { id: 'note-a', trackId: 'track-1', startTime: 0, duration: 0.2 },
+      { id: 'note-b', trackId: 'track-1', startTime: 0.3333, duration: 0.2 }
+    ];
+
+    // Resizing note-a end near 0.32s snaps to note-b start (0.3333s)
+    const snappedResize = snapTimeToNotesAndGrid(0.32, bpm, '1/16', 0, 0.5, {
+      notes,
+      activeTrackId: 'track-1',
+      excludeNoteIds: ['note-a'],
+      targetType: 'end'
+    });
+    assert.equal(snappedResize.snappedToEdge, true);
+    assert.equal(snappedResize.time, 0.3333, 'Note end snaps to start of next note');
+
+    // When snap is 'off', returns raw time untouched
+    const offSnap = snapTimeToNotesAndGrid(0.32, bpm, 'off', 0, 0.5, {
+      notes,
+      activeTrackId: 'track-1',
+      targetType: 'end'
+    });
+    assert.equal(offSnap.snappedToEdge, false);
+    assert.equal(offSnap.time, 0.32);
   });
 });
 

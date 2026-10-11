@@ -2246,6 +2246,7 @@
       midiToFrequency,
       formatTimestamp,
       quantizeTime,
+      snapTimeToNotesAndGrid,
       EventBus,
       Store,
       NOTE_NAMES,
@@ -4454,6 +4455,28 @@
         ctx.restore();
       }
 
+      // 6. Render Magnetic Snap Guide Line (when latched to an adjacent note edge)
+      if (typeof activeMagneticSnapTime === 'number' && activeMagneticSnapTime >= 0) {
+        const snapX = (activeMagneticSnapTime / duration) * contentW;
+        ctx.save();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(snapX, 0);
+        ctx.lineTo(snapX, PIANO_TOTAL_HEIGHT);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Small magnetic indicators at top and bottom
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath();
+        ctx.arc(snapX, 4, 3, 0, Math.PI * 2);
+        ctx.arc(snapX, PIANO_TOTAL_HEIGHT - 4, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
       ctx.restore();
     }
 
@@ -4466,6 +4489,7 @@
     let selectedDuration = 0.5;
     let lastPianoRollDuration = null;
     let pianoRollHoverPreview = null;
+    let activeMagneticSnapTime = null;
     let lastHoverAuditionMidi = null;
 
     function getPianoRollInsertDuration() {
@@ -6052,7 +6076,20 @@
 
         if (annotationDragState.type === 'move') {
           let rawNewStart = Math.max(0, annotationDragState.origStart + dTime);
-          let finalStart = e.shiftKey ? rawNewStart : quantizeTime(rawNewStart, bpm, snap, gridOffset);
+          let finalStart = rawNewStart;
+          if (!e.shiftKey && snap !== 'off') {
+            const pxPerSecond = rect.width / Math.max(0.1, duration);
+            const snapRes = snapTimeToNotesAndGrid(rawNewStart, bpm, snap, gridOffset, 0.5, {
+              notes: store.getState().notes,
+              activeTrackId: store.getState().view.activeTrackId,
+              excludeNoteIds: [annotationDragState.noteId],
+              pxPerSecond,
+              thresholdPx: 12,
+              targetType: 'start',
+              noteDuration: annotationDragState.origDuration
+            });
+            finalStart = snapRes.time;
+          }
           finalStart = Math.max(0, Math.min(Math.max(0, duration - annotationDragState.origDuration), finalStart));
           store.updateNote(annotationDragState.noteId, { startTime: finalStart }, { recordHistory: false });
           annotationDragState.hasMoved = true;
@@ -6062,7 +6099,19 @@
           }
         } else if (annotationDragState.type === 'resize-right') {
           let rawNewEnd = Math.max(annotationDragState.origStart + 0.05, annotationDragState.origStart + annotationDragState.origDuration + dTime);
-          let finalEnd = e.shiftKey ? rawNewEnd : quantizeTime(rawNewEnd, bpm, snap, gridOffset);
+          let finalEnd = rawNewEnd;
+          if (!e.shiftKey && snap !== 'off') {
+            const pxPerSecond = rect.width / Math.max(0.1, duration);
+            const snapRes = snapTimeToNotesAndGrid(rawNewEnd, bpm, snap, gridOffset, 0.5, {
+              notes: store.getState().notes,
+              activeTrackId: store.getState().view.activeTrackId,
+              excludeNoteIds: [annotationDragState.noteId],
+              pxPerSecond,
+              thresholdPx: 12,
+              targetType: 'end'
+            });
+            finalEnd = snapRes.time;
+          }
           finalEnd = Math.max(annotationDragState.origStart + 0.05, Math.min(duration, finalEnd));
           const newDur = Math.max(0.05, finalEnd - annotationDragState.origStart);
           store.updateNote(annotationDragState.noteId, { duration: newDur }, { recordHistory: false });
@@ -6074,7 +6123,19 @@
         } else if (annotationDragState.type === 'resize-left') {
           const origEnd = annotationDragState.origStart + annotationDragState.origDuration;
           let rawNewStart = Math.max(0, Math.min(origEnd - 0.05, annotationDragState.origStart + dTime));
-          let finalStart = e.shiftKey ? rawNewStart : quantizeTime(rawNewStart, bpm, snap, gridOffset);
+          let finalStart = rawNewStart;
+          if (!e.shiftKey && snap !== 'off') {
+            const pxPerSecond = rect.width / Math.max(0.1, duration);
+            const snapRes = snapTimeToNotesAndGrid(rawNewStart, bpm, snap, gridOffset, 0.5, {
+              notes: store.getState().notes,
+              activeTrackId: store.getState().view.activeTrackId,
+              excludeNoteIds: [annotationDragState.noteId],
+              pxPerSecond,
+              thresholdPx: 12,
+              targetType: 'start'
+            });
+            finalStart = snapRes.time;
+          }
           finalStart = Math.max(0, Math.min(origEnd - 0.05, finalStart));
           const newDur = Math.max(0.05, origEnd - finalStart);
           store.updateNote(annotationDragState.noteId, { startTime: finalStart, duration: newDur }, { recordHistory: false });
@@ -7462,8 +7523,9 @@
 
         if (y <= 24 && Math.abs(x - beat1X) <= 16) {
           el.pianoRollGridContainer.style.cursor = 'col-resize';
-          if (pianoRollHoverPreview) {
+          if (pianoRollHoverPreview || activeMagneticSnapTime !== null) {
             pianoRollHoverPreview = null;
+            activeMagneticSnapTime = null;
             document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
             renderPianoRollGrid();
           }
@@ -7474,8 +7536,9 @@
 
         if (currentPianoRollTool === 'erase') {
           el.pianoRollGridContainer.style.cursor = hit ? 'pointer' : 'default';
-          if (pianoRollHoverPreview) {
+          if (pianoRollHoverPreview || activeMagneticSnapTime !== null) {
             pianoRollHoverPreview = null;
+            activeMagneticSnapTime = null;
             document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
             renderPianoRollGrid();
           }
@@ -7487,23 +7550,26 @@
           } else {
             el.pianoRollGridContainer.style.cursor = 'default';
           }
-          if (pianoRollHoverPreview) {
+          if (pianoRollHoverPreview || activeMagneticSnapTime !== null) {
             pianoRollHoverPreview = null;
+            activeMagneticSnapTime = null;
             document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
             renderPianoRollGrid();
           }
         } else {
           if (hit && hit.isRightEdge) {
             el.pianoRollGridContainer.style.cursor = 'ew-resize';
-            if (pianoRollHoverPreview) {
+            if (pianoRollHoverPreview || activeMagneticSnapTime !== null) {
               pianoRollHoverPreview = null;
+              activeMagneticSnapTime = null;
               document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
               renderPianoRollGrid();
             }
           } else if (hit) {
             el.pianoRollGridContainer.style.cursor = 'move';
-            if (pianoRollHoverPreview) {
+            if (pianoRollHoverPreview || activeMagneticSnapTime !== null) {
               pianoRollHoverPreview = null;
+              activeMagneticSnapTime = null;
               document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
               renderPianoRollGrid();
             }
@@ -7515,14 +7581,32 @@
             const hoverMidi = PIANO_MAX_MIDI - rowIdx;
             const snap = state.tempo.snap;
             const swingFactor = state.tempo.swingFactor || 0.5;
-            const snappedStart = quantizeTime(hoverTime, state.tempo.bpm, snap, gridOffset, swingFactor);
             const insertDuration = getPianoRollInsertDuration();
+            let snappedStart = hoverTime;
+            const prevMagneticSnap = activeMagneticSnapTime;
 
-            // Skip redraw if preview note position, pitch and duration haven't changed
+            if (!e.shiftKey && snap !== 'off') {
+              const pxPerSecond = contentW / Math.max(0.1, duration);
+              const snapRes = snapTimeToNotesAndGrid(hoverTime, state.tempo.bpm, snap, gridOffset, swingFactor, {
+                notes: state.notes,
+                activeTrackId: state.view.activeTrackId,
+                pxPerSecond,
+                thresholdPx: 12,
+                targetType: 'start',
+                noteDuration: insertDuration
+              });
+              snappedStart = snapRes.time;
+              activeMagneticSnapTime = snapRes.snappedToEdge ? snapRes.edgeTime : null;
+            } else {
+              activeMagneticSnapTime = null;
+            }
+
+            // Skip redraw if preview note position, pitch and duration haven't changed and magnetic snap indicator unchanged
             if (pianoRollHoverPreview &&
                 pianoRollHoverPreview.midi === hoverMidi &&
                 Math.abs(pianoRollHoverPreview.startTime - snappedStart) < 1e-4 &&
-                Math.abs(pianoRollHoverPreview.duration - insertDuration) < 1e-4) {
+                Math.abs(pianoRollHoverPreview.duration - insertDuration) < 1e-4 &&
+                prevMagneticSnap === activeMagneticSnapTime) {
               return;
             }
 
@@ -7550,8 +7634,9 @@
 
       el.canvasPianoRoll.addEventListener('mouseleave', () => {
         lastHoverAuditionMidi = null;
-        if (pianoRollHoverPreview) {
+        if (pianoRollHoverPreview || activeMagneticSnapTime !== null) {
           pianoRollHoverPreview = null;
+          activeMagneticSnapTime = null;
           document.querySelectorAll('.piano-key.playing').forEach(k => k.classList.remove('playing'));
           renderPianoRollGrid();
         }
@@ -7896,8 +7981,21 @@
         // Clicking on empty grid: Draw new note
         const snap = state.tempo.snap;
         const swingFactor = state.tempo.swingFactor || 0.5;
-        const snappedStart = quantizeTime(clickTime, state.tempo.bpm, snap, gridOffset, swingFactor);
         const insertDuration = getPianoRollInsertDuration();
+        let snappedStart = clickTime;
+        if (!e.shiftKey && snap !== 'off') {
+          const pxPerSecond = contentW / Math.max(0.1, duration);
+          const snapRes = snapTimeToNotesAndGrid(clickTime, state.tempo.bpm, snap, gridOffset, swingFactor, {
+            notes: state.notes,
+            activeTrackId: state.view.activeTrackId,
+            pxPerSecond,
+            thresholdPx: 12,
+            targetType: 'start',
+            noteDuration: insertDuration
+          });
+          snappedStart = snapRes.time;
+        }
+        activeMagneticSnapTime = null;
 
         const newNote = store.addNote({
           trackId: state.view.activeTrackId,
@@ -7962,10 +8060,21 @@
         let finalDur = rawDur;
         if (!e.shiftKey && snap !== 'off') {
           const rawEnd = pianoRollDragState.targetNote.startTime + rawDur;
-          const snappedEnd = quantizeTime(rawEnd, state.tempo.bpm, snap, gridOffset, swingFactor);
+          const pxPerSecond = contentW / Math.max(0.1, duration);
+          const snapRes = snapTimeToNotesAndGrid(rawEnd, state.tempo.bpm, snap, gridOffset, swingFactor, {
+            notes: state.notes,
+            activeTrackId: state.view.activeTrackId,
+            excludeNoteIds: [pianoRollDragState.targetNote.id],
+            pxPerSecond,
+            thresholdPx: 12,
+            targetType: 'end'
+          });
+          const snappedEnd = snapRes.time;
+          activeMagneticSnapTime = snapRes.snappedToEdge ? snapRes.edgeTime : null;
           finalDur = Math.max(0.05, Math.round((snappedEnd - pianoRollDragState.targetNote.startTime) * 10000) / 10000);
         } else {
           finalDur = Math.round(rawDur * 1000) / 1000;
+          activeMagneticSnapTime = null;
         }
         pianoRollDragState.targetNote.duration = finalDur;
         renderPianoRollGrid();
@@ -7980,8 +8089,22 @@
           const snap = state.tempo.snap;
           const gridOffset = state.tempo.gridOffset || 0;
           const swingFactor = state.tempo.swingFactor || 0.5;
-          if (snap !== 'off') {
-            newPrimaryStart = quantizeTime(newPrimaryStart, state.tempo.bpm, snap, gridOffset, swingFactor);
+          if (!e.shiftKey && snap !== 'off') {
+            const pxPerSecond = contentW / Math.max(0.1, duration);
+            const excludeIds = pianoRollDragState.origNotesMap ? Array.from(pianoRollDragState.origNotesMap.keys()) : [pianoRollDragState.origNote.id];
+            const snapRes = snapTimeToNotesAndGrid(newPrimaryStart, state.tempo.bpm, snap, gridOffset, swingFactor, {
+              notes: state.notes,
+              activeTrackId: state.view.activeTrackId,
+              excludeNoteIds: excludeIds,
+              pxPerSecond,
+              thresholdPx: 12,
+              targetType: 'start',
+              noteDuration: pianoRollDragState.origNote.duration
+            });
+            newPrimaryStart = snapRes.time;
+            activeMagneticSnapTime = snapRes.snappedToEdge ? snapRes.edgeTime : null;
+          } else {
+            activeMagneticSnapTime = null;
           }
           let validDt = newPrimaryStart - pianoRollDragState.origNote.startTime;
           let validDMidi = dMidi;
@@ -8123,6 +8246,7 @@
       }
 
       pianoRollDragState = null;
+      activeMagneticSnapTime = null;
       renderPianoRollGrid();
       renderAnnotationTrack();
     });
@@ -8765,8 +8889,11 @@
       renderEqCurve,
       renderEqBandsGrid,
       syncEqUi,
-      syncMonitoringUi
+      syncMonitoringUi,
+      snapTimeToNotesAndGrid,
+      getActiveMagneticSnapTime: () => activeMagneticSnapTime
     };
+    window.snapTimeToNotesAndGrid = snapTimeToNotesAndGrid;
     window.handleAudioFileSelected = handleAudioFileSelected;
     window.updateZoomView = updateZoomView;
     window.seekAudio = seekAudio;

@@ -742,30 +742,98 @@
       background: var(--bg-surface);
       border-top: 1px solid var(--border-subtle);
       position: relative;
-      height: 64px;
+      min-height: 48px;
+      max-height: 220px;
       overflow-x: auto;
-      overflow-y: hidden;
+      overflow-y: auto;
     }
     .annotation-track-lane {
       position: relative;
       width: 100%;
-      height: 100%;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .annotation-track-lane-row {
+      position: relative;
+      width: 100%;
+      height: 44px;
+      min-height: 44px;
+      border-bottom: 1px solid var(--border-subtle);
       background: repeating-linear-gradient(
         90deg,
-        rgba(255, 255, 255, 0.02) 0px,
-        rgba(255, 255, 255, 0.02) 1px,
+        rgba(255, 255, 255, 0.015) 0px,
+        rgba(255, 255, 255, 0.015) 1px,
         transparent 1px,
         transparent 40px
       );
+      transition: background var(--transition-fast), opacity var(--transition-fast);
+    }
+    .annotation-track-lane-row:last-child {
+      border-bottom: none;
+    }
+    .annotation-track-lane-row.is-active {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .annotation-track-lane-row.is-muted {
+      opacity: 0.6;
+    }
+    .annotation-track-pill {
+      position: sticky;
+      left: 8px;
+      top: 6px;
+      z-index: 12;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 7px;
+      border-radius: var(--radius-sm);
+      background: rgba(24, 24, 27, 0.88);
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+      transition: all var(--transition-fast);
+      height: 22px;
+    }
+    .annotation-track-pill:hover {
+      border-color: rgba(255, 255, 255, 0.25);
+      background: rgba(39, 39, 42, 0.95);
+    }
+    .annotation-track-pill .track-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .annotation-track-pill .track-badge {
+      font-size: 0.58rem;
+      padding: 1px 4px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-left: 2px;
+    }
+    .annotation-track-pill .track-badge.badge-active {
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--accent-cyan);
+    }
+    .annotation-track-pill .track-badge.badge-muted {
+      background: rgba(244, 63, 94, 0.2);
+      color: var(--accent-rose);
     }
     .annotation-block {
       position: absolute;
-      top: 6px;
-      height: 48px;
+      top: 4px;
+      height: 36px;
       background: rgba(16, 185, 129, 0.18);
       border: 1px solid var(--accent-emerald);
       border-radius: var(--radius-sm);
-      padding: 2px 7px;
+      padding: 2px 6px;
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
@@ -775,13 +843,26 @@
       user-select: none;
       overflow: visible;
       min-width: 8px;
-      transition: box-shadow var(--transition-fast);
+      transition: box-shadow var(--transition-fast), opacity var(--transition-fast);
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
     }
     .annotation-block.is-dragging {
       cursor: grabbing !important;
       opacity: 0.85;
-      z-index: 10;
+      z-index: 15;
+    }
+    .annotation-block.is-muted {
+      border-color: #52525b !important;
+      background: rgba(82, 82, 91, 0.25) !important;
+      color: #a1a1aa !important;
+      opacity: 0.55;
+    }
+    .annotation-block.is-muted .annotation-block-pitch {
+      color: #a1a1aa !important;
+    }
+    .annotation-block.is-muted.is-selected {
+      border-color: #ffffff !important;
+      opacity: 0.9;
     }
     .annotation-resize-handle {
       position: absolute;
@@ -814,11 +895,11 @@
     }
     .annotation-block:hover {
       border-color: #fff;
-      transform: translateY(-2px);
+      transform: translateY(-1px);
       box-shadow: 0 4px 12px var(--accent-emerald-glow);
     }
     .annotation-block-pitch {
-      font-size: 0.72rem;
+      font-size: 0.70rem;
       font-weight: 700;
       color: var(--accent-emerald);
       font-family: var(--font-mono);
@@ -829,7 +910,7 @@
       pointer-events: none;
     }
     .annotation-block-chord {
-      font-size: 0.62rem;
+      font-size: 0.60rem;
       color: var(--text-secondary);
       font-weight: 500;
       overflow: hidden;
@@ -1984,7 +2065,8 @@
       calculateHomePosition,
       calculateHomeViewportScroll,
       durationToNoteName,
-      MUSICAL_NOTE_DURATIONS
+      MUSICAL_NOTE_DURATIONS,
+      sanitizeText
     } from './src/state.js';
 
     import { encodeMidi } from './src/midi-encoder.js';
@@ -2597,6 +2679,10 @@
           e.stopPropagation();
           store.toggleTrackMute(track.id);
           renderMixerStrips();
+          renderAnnotationTrack();
+          if (store.getState().view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
         });
 
         // Solo Toggle
@@ -2604,6 +2690,10 @@
           e.stopPropagation();
           store.toggleTrackSolo(track.id);
           renderMixerStrips();
+          renderAnnotationTrack();
+          if (store.getState().view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
         });
 
         // Delete Track
@@ -3249,6 +3339,7 @@
     let currentPianoRollTool = 'draw'; // 'draw' | 'erase'
     let selectedNoteIds = new Set();
     let copiedNote = null;
+    let copiedNotes = [];
     let hasCenteredPianoRoll = false;
     let pianoRollDragState = null;
 
@@ -3479,6 +3570,8 @@
       }
 
       // 4. Render notes (culled to visible range)
+      const anySolo = state.tracks.some(t => t.solo);
+
       state.notes.forEach(note => {
         if (note.isRest || note.midi === null) return;
         if (note.midi < PIANO_MIN_MIDI || note.midi > PIANO_MAX_MIDI) return;
@@ -3494,10 +3587,14 @@
 
         const isSelected = selectedNoteIds.has(note.id) || (state.view.selectedNoteId === note.id);
         const track = state.tracks.find(t => t.id === note.trackId) || state.tracks[0];
+        const isTrackMuted = Boolean(track && (track.muted || (anySolo && !track.solo)));
         const baseColor = track ? track.color : '#38bdf8';
+        const noteColor = isTrackMuted
+          ? (isSelected ? '#71717a' : 'rgba(82, 82, 91, 0.55)')
+          : baseColor;
 
         // Note Body
-        ctx.fillStyle = baseColor;
+        ctx.fillStyle = noteColor;
         ctx.beginPath();
         if (ctx.roundRect) {
           ctx.roundRect(x, y + 1, noteW, noteH, 3);
@@ -3516,14 +3613,14 @@
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(x + noteW - 3, y + 3, 2, noteH - 4);
         } else {
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.strokeStyle = isTrackMuted ? 'rgba(113, 113, 122, 0.4)' : 'rgba(255, 255, 255, 0.3)';
           ctx.lineWidth = 1;
           ctx.stroke();
         }
 
         // Note Label
         if (noteW > 24) {
-          ctx.fillStyle = '#ffffff';
+          ctx.fillStyle = isTrackMuted ? 'rgba(255, 255, 255, 0.4)' : '#ffffff';
           ctx.font = 'bold 9px monospace';
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
@@ -3838,121 +3935,186 @@
       const state = store.getState();
       const duration = state.audio.duration || 30;
 
-      state.notes.forEach(note => {
-        const track = (state.tracks && (state.tracks.find(t => t.id === note.trackId) || state.tracks[0])) || null;
-        const leftPct = (note.startTime / duration) * 100;
-        const widthPct = (note.duration / duration) * 100;
-        const isRest = Boolean(note.isRest || note.pitchName === 'REST');
-        const rawTrackColor = track ? track.color : '#38bdf8';
+      const tracks = (state.tracks && state.tracks.length > 0)
+        ? state.tracks
+        : [{ id: 'track-melody', name: 'Melody', color: '#38bdf8', muted: false, solo: false }];
+
+      const anySolo = tracks.some(t => t.solo);
+      const activeTrackId = state.view.activeTrackId;
+
+      tracks.forEach(track => {
+        const isTrackMuted = Boolean(track.muted || (anySolo && !track.solo));
+        const isActiveTrack = (track.id === activeTrackId);
+        const rawTrackColor = track.color || '#38bdf8';
         const trackColor = (typeof rawTrackColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(rawTrackColor)) ? rawTrackColor : '#38bdf8';
-        const isSelected = (note.id === state.view.selectedNoteId);
 
-        const block = document.createElement('div');
-        block.className = `annotation-block ${isRest ? 'is-rest' : ''} ${isSelected ? 'is-selected' : ''}`;
-        block.dataset.noteId = note.id;
+        const row = document.createElement('div');
+        row.className = `annotation-track-lane-row ${isActiveTrack ? 'is-active' : ''} ${isTrackMuted ? 'is-muted' : ''}`;
+        row.dataset.trackId = track.id;
 
-        if (isSelected) {
-          block.style.borderColor = '#fff';
-          block.style.boxShadow = isRest ? '0 0 14px rgba(245, 158, 11, 0.5)' : `0 0 14px ${trackColor}80`;
-        } else if (!isRest) {
-          block.style.borderColor = trackColor;
-          block.style.background = `${trackColor}25`;
-        }
-        block.style.left = `${leftPct}%`;
-        block.style.width = `${widthPct}%`;
-        const durName = durationToNoteName(note.duration, state.tempo.bpm);
-        block.title = isRest ? `Rest (${formatTimestamp(note.startTime)}, ${durName})` : `${note.pitchName || ''} • ${track ? track.name : ''} (${formatTimestamp(note.startTime)}, ${durName}) • Drag to move, handles to resize, scroll to change pitch`;
-
-        block.innerHTML = `
-          <div class="annotation-resize-handle resize-handle-left" title="Drag to adjust start time"></div>
-          <span class="annotation-block-pitch" style="${isRest ? '' : `color: ${trackColor};`}"></span>
-          <span class="annotation-block-chord"></span>
-          <div class="annotation-resize-handle resize-handle-right" title="Drag to adjust duration"></div>
+        // Sticky track pill
+        const pill = document.createElement('div');
+        pill.className = 'annotation-track-pill';
+        pill.title = `Track: ${track.name} (Click to set active track)`;
+        pill.innerHTML = `
+          <span class="track-dot" style="background-color: ${trackColor};"></span>
+          <span class="track-name">${sanitizeText(track.name)}</span>
+          ${isActiveTrack ? '<span class="track-badge badge-active">Active</span>' : ''}
+          ${isTrackMuted ? '<span class="track-badge badge-muted">Muted</span>' : ''}
         `;
-
-        const pitchSpan = block.querySelector('.annotation-block-pitch');
-        if (pitchSpan) {
-          pitchSpan.textContent = isRest ? '𝄽 Rest' : (note.pitchName || '');
-        }
-        const chordSpan = block.querySelector('.annotation-block-chord');
-        if (chordSpan) {
-          chordSpan.textContent = note.chordLabel ? note.chordLabel : durName;
-        }
-
-        // Direct Drag-to-Move and Resize handling (Task 1.4.1 & 1.4.2)
-        block.addEventListener('mousedown', (e) => {
-          if (e.button !== 0) return;
+        pill.addEventListener('click', (e) => {
           e.stopPropagation();
-
-          store.setSelectedNoteId(note.id);
-          // Preview note without shifting playback anchor (Task 1.2.2)
-          seekAudio(note.startTime, false);
-
-          if (!isRest) {
-            const match = note.pitchName.match(/^([A-Ga-g][#b]?)(-?\d+)?$/);
-            if (match) {
-              selectedPitchLetter = toKeypadPitchClass(match[1]);
-              if (match[2] !== undefined) {
-                selectedOctave = parseInt(match[2], 10);
-              }
-              updateSelectedPitchDisplay();
-            }
-            playNotePreview(note.midi, 0.2);
-          }
-
-          const isLeftHandle = e.target.classList.contains('resize-handle-left');
-          const isRightHandle = e.target.classList.contains('resize-handle-right');
-
-          annotationDragState = {
-            type: isLeftHandle ? 'resize-left' : (isRightHandle ? 'resize-right' : 'move'),
-            noteId: note.id,
-            origStart: note.startTime,
-            origDuration: note.duration,
-            startClientX: e.clientX,
-            hasMoved: false
-          };
-
-          if (annotationDragState.type === 'move') {
-            block.classList.add('is-dragging');
-          }
-        });
-
-        // Mouse Wheel inside selected block transposes pitch (Task 1.4.3 & Task 2.2.3)
-        block.addEventListener('wheel', (e) => {
-          if (note.id !== store.getState().view.selectedNoteId || isRest) return;
-          e.preventDefault();
-          e.stopPropagation();
-
-          const dir = e.deltaY < 0 ? 1 : -1;
-          const curMidi = typeof note.midi === 'number' ? note.midi : noteNameToMidi(note.pitchName);
-          const activeScale = (store.getState().theory && store.getState().theory.activeScale) || 'none';
-
-          let newMidi;
-          let newPitch;
-          if (e.altKey || activeScale === 'none') {
-            // Chromatic semitone step when Alt is pressed or scale is none
-            newMidi = Math.max(21, Math.min(108, curMidi + dir));
-            newPitch = midiToNoteName(newMidi);
-          } else {
-            // Scale-aware diatonic step (Task 2.2.3)
-            newMidi = getDiatonicStep(curMidi, dir, activeScale);
-            newPitch = midiToScalePitchName(newMidi, activeScale);
-          }
-
-          store.updateNote(note.id, { midi: newMidi, pitchName: newPitch });
-          playNotePreview(newMidi, 0.25);
+          store.setActiveTrackId(track.id);
           renderAnnotationTrack();
           if (store.getState().view.editorMode !== 'simple') {
             renderPianoRollGrid();
           }
-        }, { passive: false });
+        });
+        row.appendChild(pill);
 
-        block.addEventListener('dblclick', (e) => {
-          e.stopPropagation();
-          openNoteEditorModal(note.id);
+        // Filter notes belonging to this track (notes without trackId default to the first track)
+        const trackNotes = state.notes.filter(n => {
+          if (n.trackId) return n.trackId === track.id;
+          return track.id === tracks[0].id;
         });
 
-        el.annotationLane.appendChild(block);
+        trackNotes.forEach(note => {
+          const leftPct = (note.startTime / duration) * 100;
+          const widthPct = (note.duration / duration) * 100;
+          const isRest = Boolean(note.isRest || note.pitchName === 'REST');
+          const isSelected = (note.id === state.view.selectedNoteId || selectedNoteIds.has(note.id));
+
+          const block = document.createElement('div');
+          block.className = `annotation-block ${isRest ? 'is-rest' : ''} ${isSelected ? 'is-selected' : ''} ${isTrackMuted ? 'is-muted' : ''}`;
+          block.dataset.noteId = note.id;
+          block.dataset.trackId = track.id;
+
+          if (isTrackMuted) {
+            if (isSelected) {
+              block.style.borderColor = '#ffffff';
+              block.style.boxShadow = '0 0 10px rgba(255, 255, 255, 0.4)';
+            }
+          } else {
+            if (isSelected) {
+              block.style.borderColor = '#fff';
+              block.style.boxShadow = isRest ? '0 0 14px rgba(245, 158, 11, 0.5)' : `0 0 14px ${trackColor}80`;
+            } else if (!isRest) {
+              block.style.borderColor = trackColor;
+              block.style.background = `${trackColor}25`;
+            }
+          }
+
+          block.style.left = `${leftPct}%`;
+          block.style.width = `${widthPct}%`;
+          const durName = durationToNoteName(note.duration, state.tempo.bpm);
+          block.title = isRest
+            ? `Rest (${formatTimestamp(note.startTime)}, ${durName})`
+            : `${note.pitchName || ''} • ${track.name} (${formatTimestamp(note.startTime)}, ${durName}) • Drag to move, handles to resize, scroll to change pitch`;
+
+          if (annotationDragState && annotationDragState.noteId === note.id && annotationDragState.type === 'move') {
+            block.classList.add('is-dragging');
+          }
+
+          const pitchColorStyle = isTrackMuted
+            ? ''
+            : (isRest ? '' : `color: ${trackColor};`);
+
+          block.innerHTML = `
+            <div class="annotation-resize-handle resize-handle-left" title="Drag to adjust start time"></div>
+            <span class="annotation-block-pitch" style="${pitchColorStyle}"></span>
+            <span class="annotation-block-chord"></span>
+            <div class="annotation-resize-handle resize-handle-right" title="Drag to adjust duration"></div>
+          `;
+
+          const pitchSpan = block.querySelector('.annotation-block-pitch');
+          if (pitchSpan) {
+            pitchSpan.textContent = isRest ? '𝄽 Rest' : (note.pitchName || '');
+          }
+          const chordSpan = block.querySelector('.annotation-block-chord');
+          if (chordSpan) {
+            chordSpan.textContent = note.chordLabel ? note.chordLabel : durName;
+          }
+
+          // Direct Drag-to-Move and Resize handling (Task 1.4.1 & 1.4.2)
+          block.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+
+            store.setSelectedNoteId(note.id);
+            if (note.trackId && note.trackId !== store.getState().view.activeTrackId) {
+              store.setActiveTrackId(note.trackId);
+            }
+            // Preview note without shifting playback anchor (Task 1.2.2)
+            seekAudio(note.startTime, false);
+
+            if (!isRest) {
+              const match = note.pitchName.match(/^([A-Ga-g][#b]?)(-?\d+)?$/);
+              if (match) {
+                selectedPitchLetter = toKeypadPitchClass(match[1]);
+                if (match[2] !== undefined) {
+                  selectedOctave = parseInt(match[2], 10);
+                }
+                updateSelectedPitchDisplay();
+              }
+              playNotePreview(note.midi, 0.2);
+            }
+
+            const isLeftHandle = e.target.classList.contains('resize-handle-left');
+            const isRightHandle = e.target.classList.contains('resize-handle-right');
+
+            annotationDragState = {
+              type: isLeftHandle ? 'resize-left' : (isRightHandle ? 'resize-right' : 'move'),
+              noteId: note.id,
+              origStart: note.startTime,
+              origDuration: note.duration,
+              startClientX: e.clientX,
+              hasMoved: false
+            };
+
+            if (annotationDragState.type === 'move') {
+              block.classList.add('is-dragging');
+            }
+          });
+
+          // Mouse Wheel inside selected block transposes pitch (Task 1.4.3 & Task 2.2.3)
+          block.addEventListener('wheel', (e) => {
+            if (note.id !== store.getState().view.selectedNoteId || isRest) return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            const dir = e.deltaY < 0 ? 1 : -1;
+            const curMidi = typeof note.midi === 'number' ? note.midi : noteNameToMidi(note.pitchName);
+            const activeScale = (store.getState().theory && store.getState().theory.activeScale) || 'none';
+
+            let newMidi;
+            let newPitch;
+            if (e.altKey || activeScale === 'none') {
+              // Chromatic semitone step when Alt is pressed or scale is none
+              newMidi = Math.max(21, Math.min(108, curMidi + dir));
+              newPitch = midiToNoteName(newMidi);
+            } else {
+              // Scale-aware diatonic step (Task 2.2.3)
+              newMidi = getDiatonicStep(curMidi, dir, activeScale);
+              newPitch = midiToScalePitchName(newMidi, activeScale);
+            }
+
+            store.updateNote(note.id, { midi: newMidi, pitchName: newPitch });
+            playNotePreview(newMidi, 0.25);
+            renderAnnotationTrack();
+            if (store.getState().view.editorMode !== 'simple') {
+              renderPianoRollGrid();
+            }
+          }, { passive: false });
+
+          block.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            openNoteEditorModal(note.id);
+          });
+
+          row.appendChild(block);
+        });
+
+        el.annotationLane.appendChild(row);
       });
     }
 
@@ -4939,7 +5101,12 @@
       // Click anywhere on empty annotation track lane to unselect note and seek playhead
       el.annotationViewport.addEventListener('click', (e) => {
         if (e.button !== 0 || e.shiftKey) return;
+        if (e.target.closest('.annotation-track-pill')) return;
         if (!e.target.closest('.annotation-block')) {
+          const clickedRow = e.target.closest('.annotation-track-lane-row');
+          if (clickedRow && clickedRow.dataset.trackId && store.getState().view.activeTrackId !== clickedRow.dataset.trackId) {
+            store.setActiveTrackId(clickedRow.dataset.trackId);
+          }
           if (store.getState().view.selectedNoteId || selectedNoteIds.size > 0) {
             store.setSelectedNoteId(null);
             selectedNoteIds.clear();
@@ -5732,6 +5899,7 @@
 
     store.eventBus.on('view:activeTrack', () => {
       renderMixerStrips();
+      renderAnnotationTrack();
       renderSimpleNotesRibbon();
       if (store.getState().view.editorMode !== 'simple') {
         renderPianoRollGrid();
@@ -6969,52 +7137,102 @@
         e.preventDefault();
         insertChordAtCursor();
       } else if (e.code === 'KeyC' && (e.ctrlKey || e.metaKey)) {
-        // Ctrl+C: Copy selected note
-        const selId = store.getState().view.selectedNoteId;
-        const note = selId ? store.getState().notes.find(n => n.id === selId) : null;
-        if (note) {
-          copiedNote = { ...note };
-          showToast(`Copied note ${note.pitchName}`, 'info');
+        // Ctrl+C: Copy selected note(s)
+        const targetIds = new Set(selectedNoteIds);
+        if (store.getState().view.selectedNoteId) {
+          targetIds.add(store.getState().view.selectedNoteId);
+        }
+        const notesToCopy = store.getState().notes.filter(n => targetIds.has(n.id));
+        if (notesToCopy.length > 0) {
+          e.preventDefault();
+          notesToCopy.sort((a, b) => a.startTime - b.startTime);
+          const minStart = notesToCopy[0].startTime;
+          copiedNotes = notesToCopy.map(n => ({
+            ...n,
+            relOffset: Math.max(0, n.startTime - minStart)
+          }));
+          copiedNote = { ...notesToCopy[0] };
+          showToast(`Copied ${copiedNotes.length} note${copiedNotes.length > 1 ? 's' : ''}`, 'info');
         }
       } else if (e.code === 'KeyV' && (e.ctrlKey || e.metaKey)) {
-        // Ctrl+V: Paste note at playhead
-        if (copiedNote) {
+        // Ctrl+V: Paste note(s) at playhead
+        const notesToPaste = (copiedNotes && copiedNotes.length > 0)
+          ? copiedNotes
+          : (copiedNote ? [{ ...copiedNote, relOffset: 0 }] : []);
+
+        if (notesToPaste.length > 0) {
           e.preventDefault();
           const curTime = store.getState().playback.currentTime;
-          const pasted = store.addNote({
-            trackId: store.getState().view.activeTrackId,
-            midi: copiedNote.midi,
-            pitchName: copiedNote.pitchName,
-            startTime: curTime,
-            duration: copiedNote.duration,
-            chordLabel: copiedNote.chordLabel
-          }, { monophonic: store.getState().view.editorMode === 'simple' });
+          const activeTrackId = store.getState().view.activeTrackId;
+          const isSimple = store.getState().view.editorMode === 'simple';
+
+          const batch = notesToPaste.map(cn => ({
+            trackId: activeTrackId,
+            midi: cn.midi,
+            pitchName: cn.pitchName,
+            startTime: curTime + (cn.relOffset || 0),
+            duration: cn.duration,
+            velocity: cn.velocity,
+            chordLabel: cn.chordLabel
+          }));
+
+          const added = store.addNotes(batch, {
+            monophonic: isSimple,
+            select: false
+          });
+
           selectedNoteIds.clear();
           store.setSelectedNoteId(null);
-          playNotePreview(pasted.midi, 0.25);
-          showToast(`Pasted note ${pasted.pitchName}`, 'success');
+          if (added.length > 0 && typeof added[0].midi === 'number') {
+            playNotePreview(added[0].midi, 0.25);
+          }
+          showToast(`Pasted ${added.length} note${added.length > 1 ? 's' : ''}`, 'success');
           renderPianoRollGrid();
           renderSimpleNotesRibbon();
           renderAnnotationTrack();
         }
       } else if (e.code === 'KeyD' && (e.ctrlKey || e.metaKey)) {
-        // Ctrl+D: Duplicate selected note immediately after
-        const selId = store.getState().view.selectedNoteId;
-        const note = selId ? store.getState().notes.find(n => n.id === selId) : null;
-        if (note) {
+        // Ctrl+D: Duplicate selected note(s) immediately after
+        const targetIds = new Set(selectedNoteIds);
+        if (store.getState().view.selectedNoteId) {
+          targetIds.add(store.getState().view.selectedNoteId);
+        }
+        const notesToDup = store.getState().notes.filter(n => targetIds.has(n.id));
+        if (notesToDup.length > 0) {
           e.preventDefault();
-          const dup = store.addNote({
-            trackId: note.trackId,
-            midi: note.midi,
-            pitchName: note.pitchName,
-            startTime: note.startTime + note.duration,
-            duration: note.duration,
-            chordLabel: note.chordLabel
-          }, { monophonic: store.getState().view.editorMode === 'simple' });
+          notesToDup.sort((a, b) => a.startTime - b.startTime);
+
+          let shift;
+          if (notesToDup.length === 1) {
+            shift = notesToDup[0].duration;
+          } else {
+            const minStart = notesToDup[0].startTime;
+            const maxEnd = Math.max(...notesToDup.map(n => n.startTime + n.duration));
+            shift = maxEnd - minStart;
+          }
+
+          const isSimple = store.getState().view.editorMode === 'simple';
+          const batch = notesToDup.map(n => ({
+            trackId: n.trackId,
+            midi: n.midi,
+            pitchName: n.pitchName,
+            startTime: n.startTime + shift,
+            duration: n.duration,
+            velocity: n.velocity,
+            chordLabel: n.chordLabel
+          }));
+
+          const added = store.addNotes(batch, {
+            monophonic: isSimple,
+            select: false
+          });
+
           selectedNoteIds.clear();
           store.setSelectedNoteId(null);
-          playNotePreview(dup.midi, 0.25);
-          showToast(`Duplicated note ${dup.pitchName}`, 'success');
+          if (added.length > 0 && typeof added[0].midi === 'number') {
+            playNotePreview(added[0].midi, 0.25);
+          }
+          showToast(`Duplicated ${added.length} note${added.length > 1 ? 's' : ''}`, 'success');
           renderPianoRollGrid();
           renderSimpleNotesRibbon();
           renderAnnotationTrack();
@@ -7094,6 +7312,10 @@
         if (state.tracks && state.tracks.length > 1) {
           store.toggleTrackMute(state.view.activeTrackId);
           renderMixerStrips();
+          renderAnnotationTrack();
+          if (store.getState().view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
           const activeTrack = state.tracks.find(t => t.id === state.view.activeTrackId);
           showToast(`${activeTrack?.name || 'Track'} ${activeTrack?.muted ? 'Muted' : 'Unmuted'}`, 'info');
         } else {
@@ -7108,6 +7330,10 @@
         if (state.tracks && state.tracks.length > 1) {
           store.toggleTrackSolo(state.view.activeTrackId);
           renderMixerStrips();
+          renderAnnotationTrack();
+          if (store.getState().view.editorMode !== 'simple') {
+            renderPianoRollGrid();
+          }
           const activeTrack = state.tracks.find(t => t.id === state.view.activeTrackId);
           showToast(`${activeTrack?.name || 'Track'} Solo ${activeTrack?.solo ? 'On' : 'Off'}`, 'info');
         } else {
@@ -7416,6 +7642,8 @@
       setPianoRollTool: (t) => { if (t === 'draw') el.btnToolDraw.click(); else el.btnToolErase.click(); },
       getSelectedNoteIds: () => selectedNoteIds,
       setSelectedNoteIds: (set) => { selectedNoteIds = new Set(set); },
+      getCopiedNotes: () => copiedNotes,
+      setCopiedNotes: (notes) => { copiedNotes = notes; },
       getPeakCache: () => currentPeakCache,
       synthesizeNoteVoice,
       openNoteEditorModal,

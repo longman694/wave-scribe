@@ -11,8 +11,8 @@ This document tracks the specification, implementation progress, and test valida
 | **Phase 1** | **State Engine Extensions**<br>Atomic batch note insertion (`addNotes`) | [src/state.js](file:///d:/Programing/music-transcriber/src/state.js) | ✅ Complete | Verified in `test/state.test.mjs` & E2E |
 | **Phase 2** | **Undo Stack Remediation**<br>Single Ctrl+Z removes inserted piano roll note | [index.html](file:///d:/Programing/music-transcriber/index.html) | ✅ Complete | Verified in `test/ux_improvements.test.mjs` & E2E |
 | **Phase 3** | **Zoom In/Out Anchor Stabilization**<br>Mouse anchor on wheel; Playhead anchor on controls | [index.html](file:///d:/Programing/music-transcriber/index.html) | ✅ Complete | Verified in `test/e2e_verify_phase1_to_3.mjs` |
-| **Phase 4** | **Multi-Block Copy & Paste**<br>`Ctrl+C`, `Ctrl+V`, `Ctrl+D` for multi-selection | [index.html](file:///d:/Programing/music-transcriber/index.html) | ⏳ Awaiting User Verification | E2E clipboard test |
-| **Phase 5** | **Multi-Track Visual Separation & Mute Styles**<br>Gray out muted track blocks & Split annotation track per track | [index.html](file:///d:/Programing/music-transcriber/index.html) | ⏳ Awaiting User Verification | Visual & E2E lane tests |
+| **Phase 4** | **Multi-Block Copy & Paste**<br>`Ctrl+C`, `Ctrl+V`, `Ctrl+D` for multi-selection | [index.html](file:///d:/Programing/music-transcriber/index.html) | ✅ Complete | Verified in `test/e2e_verify_phase4_and_5.mjs` |
+| **Phase 5** | **Multi-Track Visual Separation & Mute Styles**<br>Gray out muted track blocks & Split annotation track per track | [index.html](file:///d:/Programing/music-transcriber/index.html) | ✅ Complete | Verified in `test/e2e_verify_phase4_and_5.mjs` |
 
 ---
 
@@ -41,14 +41,15 @@ This document tracks the specification, implementation progress, and test valida
 - [x] Wire `btnZoomIn`, `btnZoomOut`, and `sliderWaveformZoom` to use the playhead anchor.
 - [x] Ensure horizontal scroll synchronization between waveform, annotation, and piano roll viewports remains locked.
 
-### Phase 4: Piano Roll Multi-Block Copy, Paste & Duplicate (After User Review)
-- [ ] Read all note IDs from `selectedNoteIds` (plus `state.view.selectedNoteId`) in `Ctrl+C`.
-- [ ] Store `copiedNotes` with normalized time offsets relative to $\min(\text{startTime})$.
-- [ ] In `Ctrl+V`, paste all `copiedNotes` starting at `currentTime` via `store.addNotes(...)` in a single undo transaction.
-- [ ] In `Ctrl+D`, duplicate all selected notes shifted by the total bounding time span via `store.addNotes(...)`.
-- [ ] Ensure note deselection on paste/duplicate follows the established invariant.
+### Phase 4: Piano Roll Multi-Block Copy, Paste & Duplicate
+- [x] Read all note IDs from `selectedNoteIds` (plus `state.view.selectedNoteId`) in `Ctrl+C`.
+- [x] Store `copiedNotes` with normalized time offsets relative to $\min(\text{startTime})$.
+- [x] In `Ctrl+V`, paste all `copiedNotes` starting at `currentTime` via `store.addNotes(...)` in a single undo transaction.
+- [x] In `Ctrl+D`, duplicate all selected notes shifted by the total bounding time span via `store.addNotes(...)`.
+- [x] Ensure note deselection on paste/duplicate follows the established invariant.
 
-### Phase 5: Multi-Track Visual Separation & Mute Styles (After User Review)
-- [ ] Piano Roll Grid: Paint note blocks of muted/non-solo tracks with zinc gray (`#3f3f46` / `#71717a`) and dimmed labels.
-- [ ] Annotation Track: Split `#annotation-viewport` into dedicated horizontal lanes (one per track) with track header badge, active indicator, and track-specific note blocks.
-- [ ] Gray out annotation blocks and lanes for muted tracks.
+### Phase 5: Multi-Track Visual Separation & Mute Styles
+- [x] Piano Roll Grid: Paint note blocks of muted/non-solo tracks with zinc gray (`#52525b` / `#71717a`) and dimmed labels.
+- [x] Annotation Track: Split `#annotation-viewport` into dedicated horizontal lanes (one per track) with sticky track header pill, active indicator, and track-specific note blocks.
+- [x] Gray out annotation blocks and lane rows for muted tracks with `is-muted` styling and opacity reduction.
+- [x] Re-render Annotation Track and Piano Roll Grid immediately upon track mute/solo toggles via mixer strips or `M`/`S` hotkeys.

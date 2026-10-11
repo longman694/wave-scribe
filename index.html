@@ -8101,15 +8101,32 @@
 
     // Global Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
+      const activeEl = document.activeElement;
+      const isTextInput = activeEl && (
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.tagName === 'SELECT' ||
+        (activeEl.tagName === 'INPUT' && !['range', 'checkbox', 'radio', 'button'].includes(activeEl.type)) ||
+        Boolean(activeEl.isContentEditable)
+      );
+
+      // Spacebar globally toggles playback (even when a range slider/button is focused)
+      if (e.code === 'Space' || e.key === ' ') {
+        if (!isTextInput) {
+          e.preventDefault();
+          if (activeEl && activeEl.tagName === 'INPUT' && activeEl.type === 'range') {
+            activeEl.blur();
+          }
+          togglePlayback();
+          return;
+        }
+      }
+
       // Don't intercept if user is typing into an input
-      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
         return;
       }
 
-      if (e.code === 'Space') {
-        e.preventDefault();
-        togglePlayback();
-      } else if (e.code === 'Home') {
+      if (e.code === 'Home') {
         e.preventDefault();
         handleHomeRewind();
       } else if (e.code === 'ArrowLeft') {

@@ -561,6 +561,42 @@ export class EventBus {
   }
 }
 
+// --- Parametric Equalizer Definitions & Presets ---
+export const DEFAULT_EQ_BANDS = [
+  { type: 'lowshelf', frequency: 100, gain: 0, q: 1.0, label: 'Low' },
+  { type: 'peaking', frequency: 400, gain: 0, q: 1.0, label: 'Low-Mid' },
+  { type: 'peaking', frequency: 1500, gain: 0, q: 1.0, label: 'Mid' },
+  { type: 'peaking', frequency: 4500, gain: 0, q: 1.0, label: 'High-Mid' },
+  { type: 'highshelf', frequency: 10000, gain: 0, q: 1.0, label: 'High' }
+];
+
+export const EQ_PRESETS = {
+  flat: {
+    name: 'Flat',
+    gains: [0, 0, 0, 0, 0]
+  },
+  bassBoost: {
+    name: 'Bass Boost',
+    gains: [6, 3, 0, 0, 0]
+  },
+  bassCut: {
+    name: 'Bass Cut (High Clarity)',
+    gains: [-12, -6, 0, 2, 3]
+  },
+  vocalEnhance: {
+    name: 'Vocal / Melody Enhance',
+    gains: [-3, -1, 4, 3, 1]
+  },
+  trebleBoost: {
+    name: 'Treble Boost (Air)',
+    gains: [-2, 0, 1, 4, 6]
+  },
+  acoustic: {
+    name: 'Acoustic Clarity',
+    gains: [-3, 2, -2, 4, 3]
+  }
+};
+
 // --- Reactive State Store with History (Undo/Redo) ---
 
 export const INITIAL_STATE = {
@@ -569,7 +605,11 @@ export const INITIAL_STATE = {
     duration: 0,
     sampleRate: 44100,
     channels: 2,
-    isLoaded: false
+    isLoaded: false,
+    eq: {
+      enabled: false,
+      bands: JSON.parse(JSON.stringify(DEFAULT_EQ_BANDS))
+    }
   },
   playback: {
     currentTime: 0,
@@ -581,7 +621,9 @@ export const INITIAL_STATE = {
       start: 0,
       end: 0
     },
-    monitoringMode: 'all', // 'all' | 'audio-only' | 'synth-solo'
+    audioMuted: false,
+    synthMuted: false,
+    monitoringMode: 'all', // 'all' | 'audio-only' | 'synth-solo' | 'muted'
     audioVolume: 0.8,
     synthVolume: 0.8
   },
@@ -751,6 +793,7 @@ export class Store {
 
   setAudioLoaded({ fileName, duration, sampleRate, channels }) {
     this.state.audio = {
+      ...this.state.audio,
       fileName,
       duration: Math.max(0, duration),
       sampleRate: sampleRate || 44100,
@@ -774,6 +817,61 @@ export class Store {
         channels: buffer.numberOfChannels || 2
       });
     }
+  }
+
+  // --- Parametric Equalizer Actions ---
+
+  setEqEnabled(enabled) {
+    if (!this.state.audio.eq) {
+      this.state.audio.eq = { enabled: false, bands: JSON.parse(JSON.stringify(DEFAULT_EQ_BANDS)) };
+    }
+    this.state.audio.eq.enabled = Boolean(enabled);
+    this.notify('audio:eq', this.state.audio.eq);
+    this.eventBus.emit('audio:eq', this.state.audio.eq);
+  }
+
+  toggleEq() {
+    this.setEqEnabled(!this.state.audio.eq?.enabled);
+  }
+
+  updateEqBand(bandIndex, { frequency, gain, q } = {}) {
+    if (!this.state.audio.eq) {
+      this.state.audio.eq = { enabled: false, bands: JSON.parse(JSON.stringify(DEFAULT_EQ_BANDS)) };
+    }
+    if (this.state.audio.eq.bands[bandIndex]) {
+      const band = this.state.audio.eq.bands[bandIndex];
+      if (typeof frequency === 'number' && Number.isFinite(frequency)) {
+        band.frequency = Math.max(20, Math.min(20000, frequency));
+      }
+      if (typeof gain === 'number' && Number.isFinite(gain)) {
+        band.gain = Math.max(-24, Math.min(24, gain));
+      }
+      if (typeof q === 'number' && Number.isFinite(q)) {
+        band.q = Math.max(0.1, Math.min(12, q));
+      }
+      this.notify('audio:eq', this.state.audio.eq);
+      this.eventBus.emit('audio:eq', this.state.audio.eq);
+    }
+  }
+
+  setEqPreset(presetName) {
+    if (!this.state.audio.eq) {
+      this.state.audio.eq = { enabled: false, bands: JSON.parse(JSON.stringify(DEFAULT_EQ_BANDS)) };
+    }
+    const preset = EQ_PRESETS[presetName];
+    if (preset && Array.isArray(preset.gains)) {
+      preset.gains.forEach((g, idx) => {
+        if (this.state.audio.eq.bands[idx]) {
+          this.state.audio.eq.bands[idx].gain = g;
+        }
+      });
+      this.notify('audio:eq', this.state.audio.eq);
+      this.eventBus.emit('audio:eq', this.state.audio.eq);
+    }
+  }
+
+  resetEq() {
+    this.setEqPreset('flat');
   }
 
   // --- Playback Actions ---
@@ -853,11 +951,62 @@ export class Store {
     this.eventBus.emit('playback:loop', this.state.playback.loop);
   }
 
+  setAudioMuted(muted) {
+    this.state.playback.audioMuted = Boolean(muted);
+    this._syncMonitoringMode();
+    this.notify('playback:mute', { audioMuted: this.state.playback.audioMuted, synthMuted: this.state.playback.synthMuted });
+    this.eventBus.emit('playback:mute', { audioMuted: this.state.playback.audioMuted, synthMuted: this.state.playback.synthMuted });
+  }
+
+  toggleAudioMute() {
+    this.setAudioMuted(!this.state.playback.audioMuted);
+  }
+
+  setSynthMuted(muted) {
+    this.state.playback.synthMuted = Boolean(muted);
+    this._syncMonitoringMode();
+    this.notify('playback:mute', { audioMuted: this.state.playback.audioMuted, synthMuted: this.state.playback.synthMuted });
+    this.eventBus.emit('playback:mute', { audioMuted: this.state.playback.audioMuted, synthMuted: this.state.playback.synthMuted });
+  }
+
+  toggleSynthMute() {
+    this.setSynthMuted(!this.state.playback.synthMuted);
+  }
+
+  _syncMonitoringMode() {
+    const aMuted = this.state.playback.audioMuted;
+    const sMuted = this.state.playback.synthMuted;
+    if (aMuted && !sMuted) {
+      this.state.playback.monitoringMode = 'synth-solo';
+    } else if (!aMuted && sMuted) {
+      this.state.playback.monitoringMode = 'audio-only';
+    } else if (aMuted && sMuted) {
+      this.state.playback.monitoringMode = 'muted';
+    } else {
+      this.state.playback.monitoringMode = 'all';
+    }
+  }
+
   setMonitoringMode(mode) {
-    if (['all', 'audio-only', 'synth-solo'].includes(mode)) {
+    if (['all', 'audio-only', 'synth-solo', 'muted'].includes(mode)) {
       this.state.playback.monitoringMode = mode;
+      if (mode === 'all') {
+        this.state.playback.audioMuted = false;
+        this.state.playback.synthMuted = false;
+      } else if (mode === 'audio-only') {
+        this.state.playback.audioMuted = false;
+        this.state.playback.synthMuted = true;
+      } else if (mode === 'synth-solo') {
+        this.state.playback.audioMuted = true;
+        this.state.playback.synthMuted = false;
+      } else if (mode === 'muted') {
+        this.state.playback.audioMuted = true;
+        this.state.playback.synthMuted = true;
+      }
       this.notify('playback:monitoring', mode);
       this.eventBus.emit('playback:monitoring', mode);
+      this.notify('playback:mute', { audioMuted: this.state.playback.audioMuted, synthMuted: this.state.playback.synthMuted });
+      this.eventBus.emit('playback:mute', { audioMuted: this.state.playback.audioMuted, synthMuted: this.state.playback.synthMuted });
     }
   }
 
@@ -1380,13 +1529,17 @@ export class Store {
         fileName: this.state.audio.fileName,
         duration: this.state.audio.duration,
         sampleRate: this.state.audio.sampleRate,
-        channels: this.state.audio.channels
+        channels: this.state.audio.channels,
+        eq: this.state.audio.eq
       },
       playback: {
         currentTime: this.state.playback.currentTime,
         playbackRate: this.state.playback.playbackRate,
         detuneCents: this.state.playback.detuneCents,
-        loop: this.state.playback.loop
+        loop: this.state.playback.loop,
+        audioMuted: this.state.playback.audioMuted,
+        synthMuted: this.state.playback.synthMuted,
+        monitoringMode: this.state.playback.monitoringMode
       },
       tempo: this.state.tempo,
       theory: this.state.theory || { activeScale: 'none' },
@@ -1409,6 +1562,19 @@ export class Store {
         this.history.past = [];
         this.history.future = [];
         this._lastHistoryAction = null;
+      }
+
+      if (data.audioMeta && typeof data.audioMeta === 'object' && data.audioMeta.eq) {
+        this.state.audio.eq = JSON.parse(JSON.stringify(data.audioMeta.eq));
+        this.notify('audio:eq', this.state.audio.eq);
+        this.eventBus.emit('audio:eq', this.state.audio.eq);
+      }
+      if (data.playback && typeof data.playback === 'object') {
+        if (typeof data.playback.audioMuted === 'boolean') this.state.playback.audioMuted = data.playback.audioMuted;
+        if (typeof data.playback.synthMuted === 'boolean') this.state.playback.synthMuted = data.playback.synthMuted;
+        if (typeof data.playback.monitoringMode === 'string') this.state.playback.monitoringMode = data.playback.monitoringMode;
+        this.notify('playback:mute', { audioMuted: this.state.playback.audioMuted, synthMuted: this.state.playback.synthMuted });
+        this.eventBus.emit('playback:mute', { audioMuted: this.state.playback.audioMuted, synthMuted: this.state.playback.synthMuted });
       }
 
       if (data.tempo && typeof data.tempo === 'object') {

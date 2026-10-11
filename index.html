@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Music&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="alternate icon" href="favicon.ico">
   <style>
     @font-face {
       font-family: 'Noto Music';
@@ -1499,6 +1501,108 @@
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
+    /* Parametric Equalizer */
+    .eq-bands-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .eq-band-strip {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 8px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      transition: border-color var(--transition-fast);
+    }
+    .eq-band-strip:hover {
+      border-color: var(--border-strong);
+    }
+    .eq-band-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .eq-band-gain-val {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent-emerald);
+      min-height: 18px;
+    }
+    .eq-slider-vertical-wrap {
+      height: 90px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 0;
+    }
+    .eq-slider-vertical {
+      -webkit-appearance: none;
+      appearance: none;
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 6px;
+      height: 80px;
+      background: var(--border-subtle);
+      border-radius: var(--radius-full);
+      outline: none;
+      cursor: pointer;
+    }
+    .eq-slider-vertical::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      cursor: pointer;
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+    }
+    .eq-band-param {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 0.68rem;
+    }
+    .eq-band-param-header {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+    }
+    .eq-band-param-val {
+      font-family: var(--font-mono);
+      color: var(--text-primary);
+    }
+    .eq-band-slider-mini {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 3px;
+      background: var(--border-subtle);
+      border-radius: var(--radius-full);
+      outline: none;
+      cursor: pointer;
+    }
+    .eq-band-slider-mini::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -1612,24 +1716,26 @@
     <!-- Audio & Synth Mixer Monitoring -->
     <div class="transport-group">
       <div class="tempo-speed-card">
-        <span class="control-label">Monitor</span>
-        <select id="select-monitoring-mode">
-          <option value="all">Audio + Synth</option>
-          <option value="audio-only">Audio Only</option>
-          <option value="synth-solo">Synth Solo (Mute Audio)</option>
-        </select>
-        <div class="slider-group" title="Reference Audio Volume &amp; Level">
+        <div class="slider-group" title="Reference Audio Volume, Mute &amp; Level">
+          <button class="btn btn-sm" id="btn-mute-audio" title="Toggle Reference Audio Mute (M)" style="padding: 2px 8px; font-size: 0.72rem; min-width: 48px;">Mute</button>
           <span style="font-size: 0.72rem; color: var(--text-muted);">Audio</span>
           <input type="range" class="slider-input" id="slider-audio-volume" min="0" max="1" step="0.01" value="0.8">
           <span class="mono" id="val-audio-db" style="font-size: 0.7rem; color: var(--text-muted); min-width: 44px;">-1.9dB</span>
           <div class="vu-meter-bar" title="Audio RMS Level"><div class="vu-meter-fill" id="meter-audio-fill" style="width: 25%;"></div></div>
         </div>
-        <div class="slider-group" title="Transcription Synth Volume &amp; Level">
+        <div class="slider-group" title="Transcription Synth Volume, Mute &amp; Level">
+          <button class="btn btn-sm" id="btn-mute-synth" title="Toggle Transcription Synth Mute" style="padding: 2px 8px; font-size: 0.72rem; min-width: 48px;">Mute</button>
           <span style="font-size: 0.72rem; color: var(--text-muted);">Synth</span>
           <input type="range" class="slider-input" id="slider-synth-volume" min="0" max="1" step="0.01" value="0.8">
           <span class="mono" id="val-synth-db" style="font-size: 0.7rem; color: var(--text-muted); min-width: 44px;">-1.9dB</span>
           <div class="vu-meter-bar" title="Synth RMS Level"><div class="vu-meter-fill" id="meter-synth-fill" style="width: 25%;"></div></div>
         </div>
+        <!-- Hidden select for backwards compatibility with tests querying select-monitoring-mode -->
+        <select id="select-monitoring-mode" style="display: none;" aria-hidden="true">
+          <option value="all">Audio + Synth</option>
+          <option value="audio-only">Audio Only</option>
+          <option value="synth-solo">Synth Solo (Mute Audio)</option>
+        </select>
       </div>
     </div>
 
@@ -1699,6 +1805,7 @@
           <input type="range" class="slider-input" id="slider-waveform-zoom" min="0.5" max="30" step="0.5" value="1.0" style="width: 120px;">
           <button class="btn btn-sm" id="btn-zoom-in" title="Zoom In (+)">+</button>
           <button class="btn btn-sm" id="btn-zoom-fit" title="Fit to Screen">Fit</button>
+          <button class="btn btn-sm" id="btn-eq-toggle" title="Parametric Equalizer Settings (Audio Track)" style="margin-left: 4px;">EQ</button>
         </div>
       </div>
 
@@ -2041,6 +2148,73 @@
     </div>
   </div>
 
+  <!-- Parametric Equalizer Modal (Audio Track Only) -->
+  <div class="modal-backdrop" id="modal-parametric-eq">
+    <div class="modal-card" style="max-width: 720px; width: 92%;">
+      <div class="modal-header" style="margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h3 style="font-size: 1.1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-emerald);">
+              <line x1="4" y1="21" x2="4" y2="14"></line>
+              <line x1="4" y1="10" x2="4" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12" y2="3"></line>
+              <line x1="20" y1="21" x2="20" y2="16"></line>
+              <line x1="20" y1="12" x2="20" y2="3"></line>
+              <line x1="1" y1="14" x2="7" y2="14"></line>
+              <line x1="9" y1="8" x2="15" y2="8"></line>
+              <line x1="17" y1="16" x2="23" y2="16"></line>
+            </svg>
+            <span>Parametric Equalizer</span>
+          </h3>
+          <span class="badge" id="badge-eq-status">Bypassed</span>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">(Audio Track)</span>
+        </div>
+        <button class="btn btn-sm btn-icon" id="btn-close-eq-modal" type="button" title="Close (Esc)">✕</button>
+      </div>
+
+      <!-- Toolbar: Master Power, Presets, Reset -->
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="btn btn-sm" id="btn-eq-master-power" type="button" title="Toggle EQ Enabled/Bypassed">EQ Bypassed</button>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 500;">Preset:</span>
+            <select class="control-select" id="select-eq-preset" style="background: var(--bg-card); border: 1px solid var(--border-subtle); color: #fff; padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600;">
+              <option value="flat">Flat / Neutral</option>
+              <option value="bassBoost">Bass Boost</option>
+              <option value="bassCut">Bass Cut (Clarity)</option>
+              <option value="vocalEnhance">Vocal / Melody Enhance</option>
+              <option value="trebleBoost">Treble Boost (Air)</option>
+              <option value="acoustic">Acoustic Clarity</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="btn btn-sm" id="btn-eq-reset-flat" type="button" title="Reset all bands to 0 dB">Reset Flat</button>
+        </div>
+      </div>
+
+      <!-- Frequency Response Canvas -->
+      <div class="eq-curve-container" style="background: #090a0f; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 6px; margin-bottom: 12px; position: relative;">
+        <canvas id="canvas-eq-curve" width="670" height="150" style="width: 100%; height: 150px; display: block; border-radius: 4px; cursor: crosshair;"></canvas>
+      </div>
+
+      <!-- 5-Band Strips Controls Grid -->
+      <div class="eq-bands-grid" id="eq-bands-grid">
+        <!-- Dynamically rendered / initialized 5 bands: Low Shelf, Low-Mid, Mid, High-Mid, High Shelf -->
+      </div>
+
+      <!-- Footer & Routing Note -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-subtle);">
+        <span style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          Parametric filter affects the reference audio track only. Synth transcription playback is uncolored.
+        </span>
+        <button class="btn btn-primary btn-sm" id="btn-done-eq-modal" type="button">Done</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notifications Container -->
   <div class="toast-container" id="toast-container"></div>
 
@@ -2066,6 +2240,8 @@
       calculateHomeViewportScroll,
       durationToNoteName,
       MUSICAL_NOTE_DURATIONS,
+      DEFAULT_EQ_BANDS,
+      EQ_PRESETS,
       sanitizeText
     } from './src/state.js';
 
@@ -2139,6 +2315,8 @@
 
       // Mixer & Volumes
       selectMonitoringMode: document.getElementById('select-monitoring-mode'),
+      btnMuteAudio: document.getElementById('btn-mute-audio'),
+      btnMuteSynth: document.getElementById('btn-mute-synth'),
       sliderAudioVolume: document.getElementById('slider-audio-volume'),
       valAudioDb: document.getElementById('val-audio-db'),
       meterAudioFill: document.getElementById('meter-audio-fill'),
@@ -2185,6 +2363,18 @@
       btnZoomIn: document.getElementById('btn-zoom-in'),
       btnZoomOut: document.getElementById('btn-zoom-out'),
       btnZoomFit: document.getElementById('btn-zoom-fit'),
+      btnEqToggle: document.getElementById('btn-eq-toggle'),
+
+      // Parametric EQ Modal
+      modalParametricEq: document.getElementById('modal-parametric-eq'),
+      btnCloseEqModal: document.getElementById('btn-close-eq-modal'),
+      btnDoneEqModal: document.getElementById('btn-done-eq-modal'),
+      btnEqMasterPower: document.getElementById('btn-eq-master-power'),
+      selectEqPreset: document.getElementById('select-eq-preset'),
+      btnEqResetFlat: document.getElementById('btn-eq-reset-flat'),
+      canvasEqCurve: document.getElementById('canvas-eq-curve'),
+      eqBandsGrid: document.getElementById('eq-bands-grid'),
+      badgeEqStatus: document.getElementById('badge-eq-status'),
 
       // Annotation
       annotationViewport: document.getElementById('annotation-viewport'),
@@ -2779,6 +2969,7 @@
     let audioAnalyserNode = null;
     let synthMasterGainNode = null;
     let synthAnalyserNode = null;
+    let eqFilterNodes = [];
     let currentAudioBuffer = null;
     let currentPeakCache = null;
     let activeAudioBlobUrl = null;
@@ -2796,6 +2987,45 @@
       return audioCtx;
     }
 
+    function createEqFilters(ctx) {
+      if (eqFilterNodes && eqFilterNodes.length === 5) return eqFilterNodes;
+      const bands = store.getState().audio?.eq?.bands || DEFAULT_EQ_BANDS;
+      eqFilterNodes = bands.map((band) => {
+        const filter = ctx.createBiquadFilter();
+        filter.type = band.type;
+        filter.frequency.value = band.frequency;
+        filter.gain.value = 0;
+        if (typeof band.q === 'number' && filter.Q) {
+          filter.Q.value = band.q;
+        }
+        return filter;
+      });
+      for (let i = 0; i < eqFilterNodes.length - 1; i++) {
+        eqFilterNodes[i].connect(eqFilterNodes[i + 1]);
+      }
+      return eqFilterNodes;
+    }
+
+    function updateAudioEqNodes() {
+      const ctx = getAudioContext();
+      if (ctx) createEqFilters(ctx);
+      const eqState = store.getState().audio?.eq;
+      if (!eqState || !eqFilterNodes.length) return;
+      const isEnabled = Boolean(eqState.enabled);
+      eqState.bands.forEach((b, idx) => {
+        const node = eqFilterNodes[idx];
+        if (node) {
+          node.type = b.type;
+          node.frequency.value = b.frequency;
+          const targetGain = isEnabled ? b.gain : 0;
+          node.gain.value = targetGain;
+          if (typeof b.q === 'number' && node.Q) {
+            node.Q.value = b.q;
+          }
+        }
+      });
+    }
+
     function initAudioPipeline() {
       const ctx = getAudioContext();
       if (!ctx) return;
@@ -2803,7 +3033,7 @@
         synthMasterGainNode = ctx.createGain();
         synthAnalyserNode = ctx.createAnalyser();
         synthAnalyserNode.fftSize = 128;
-        const curSynthVol = store.getState().playback.monitoringMode === 'audio-only' ? 0 : store.getState().playback.synthVolume;
+        const curSynthVol = store.getState().playback.synthMuted ? 0 : store.getState().playback.synthVolume;
         synthMasterGainNode.gain.setValueAtTime(curSynthVol, ctx.currentTime);
         synthMasterGainNode.connect(synthAnalyserNode);
         synthAnalyserNode.connect(ctx.destination);
@@ -2814,14 +3044,495 @@
           referenceGainNode = ctx.createGain();
           audioAnalyserNode = ctx.createAnalyser();
           audioAnalyserNode.fftSize = 128;
-          const curAudioVol = store.getState().playback.monitoringMode === 'synth-solo' ? 0 : store.getState().playback.audioVolume;
+          const curAudioVol = store.getState().playback.audioMuted ? 0 : store.getState().playback.audioVolume;
           referenceGainNode.gain.setValueAtTime(curAudioVol, ctx.currentTime);
-          mediaElementSource.connect(referenceGainNode);
+
+          // 5-band Parametric EQ nodes for Reference Audio Track only
+          createEqFilters(ctx);
+          mediaElementSource.connect(eqFilterNodes[0]);
+          eqFilterNodes[eqFilterNodes.length - 1].connect(referenceGainNode);
+
           referenceGainNode.connect(audioAnalyserNode);
           audioAnalyserNode.connect(ctx.destination);
+
+          updateAudioEqNodes();
         } catch (err) {
           console.warn('MediaElementSource initialization:', err);
         }
+      }
+    }
+
+    // --- Parametric Equalizer Math & Rendering ---
+
+    function computeBiquadDb(band, f, sampleRate = 44100) {
+      if (Math.abs(band.gain) < 0.01) return 0;
+      const w0 = (2 * Math.PI * band.frequency) / sampleRate;
+      const w = (2 * Math.PI * f) / sampleRate;
+      const cos_w0 = Math.cos(w0);
+      const sin_w0 = Math.sin(w0);
+      const cos_w = Math.cos(w);
+      const cos_2w = Math.cos(2 * w);
+      const sin_w = Math.sin(w);
+      const sin_2w = Math.sin(2 * w);
+      const A = Math.pow(10, band.gain / 40);
+      const Q = band.q || 1.0;
+      const alpha = sin_w0 / (2 * Q);
+
+      let b0, b1, b2, a0, a1, a2;
+      if (band.type === 'lowshelf') {
+        const sqrtA = Math.sqrt(A);
+        b0 = A * ((A + 1) - (A - 1) * cos_w0 + 2 * sqrtA * alpha);
+        b1 = 2 * A * ((A - 1) - (A + 1) * cos_w0);
+        b2 = A * ((A + 1) - (A - 1) * cos_w0 - 2 * sqrtA * alpha);
+        a0 = (A + 1) + (A - 1) * cos_w0 + 2 * sqrtA * alpha;
+        a1 = -2 * ((A - 1) + (A + 1) * cos_w0);
+        a2 = (A + 1) + (A - 1) * cos_w0 - 2 * sqrtA * alpha;
+      } else if (band.type === 'highshelf') {
+        const sqrtA = Math.sqrt(A);
+        b0 = A * ((A + 1) + (A - 1) * cos_w0 + 2 * sqrtA * alpha);
+        b1 = -2 * A * ((A - 1) + (A + 1) * cos_w0);
+        b2 = A * ((A + 1) + (A - 1) * cos_w0 - 2 * sqrtA * alpha);
+        a0 = (A + 1) - (A - 1) * cos_w0 + 2 * sqrtA * alpha;
+        a1 = 2 * ((A - 1) - (A + 1) * cos_w0);
+        a2 = (A + 1) - (A - 1) * cos_w0 - 2 * sqrtA * alpha;
+      } else { // peaking
+        b0 = 1 + alpha * A;
+        b1 = -2 * cos_w0;
+        b2 = 1 - alpha * A;
+        a0 = 1 + alpha / A;
+        a1 = -2 * cos_w0;
+        a2 = 1 - alpha / A;
+      }
+
+      const numRe = b0 + b1 * cos_w + b2 * cos_2w;
+      const numIm = -b1 * sin_w - b2 * sin_2w;
+      const denRe = a0 + a1 * cos_w + a2 * cos_2w;
+      const denIm = -a1 * sin_w - a2 * sin_2w;
+
+      const numMagSq = numRe * numRe + numIm * numIm;
+      const denMagSq = denRe * denRe + denIm * denIm;
+      if (denMagSq < 1e-12) return 0;
+      return 10 * Math.log10(numMagSq / denMagSq);
+    }
+
+    function renderEqCurve() {
+      const canvas = el.canvasEqCurve;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const displayW = canvas.clientWidth || 640;
+      const displayH = canvas.clientHeight || 150;
+      if (canvas.width !== Math.round(displayW * dpr) || canvas.height !== Math.round(displayH * dpr)) {
+        canvas.width = Math.round(displayW * dpr);
+        canvas.height = Math.round(displayH * dpr);
+      }
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      const W = displayW;
+      const H = displayH;
+
+      ctx.fillStyle = '#090a10';
+      ctx.fillRect(0, 0, W, H);
+
+      const minF = 20, maxF = 20000;
+      const minDb = -18, maxDb = 18;
+
+      function fToX(f) {
+        return (Math.log10(f / minF) / Math.log10(maxF / minF)) * W;
+      }
+      function xToF(x) {
+        return minF * Math.pow(maxF / minF, Math.max(0, Math.min(W, x)) / W);
+      }
+      function dbToY(db) {
+        const norm = (db - minDb) / (maxDb - minDb);
+        return H - norm * H;
+      }
+
+      // dB Grid lines
+      ctx.lineWidth = 1;
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+
+      [-12, -6, 0, 6, 12].forEach((g) => {
+        const y = dbToY(g);
+        ctx.strokeStyle = g === 0 ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.07)';
+        ctx.setLineDash(g === 0 ? [] : [3, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+
+        ctx.fillStyle = g === 0 ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.25)';
+        ctx.fillText(`${g > 0 ? '+' : ''}${g}dB`, W - 8, y);
+      });
+
+      // Frequency Grid lines
+      ctx.setLineDash([2, 4]);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      const freqGrid = [
+        { f: 50, label: '50' },
+        { f: 100, label: '100' },
+        { f: 200, label: '200' },
+        { f: 500, label: '500' },
+        { f: 1000, label: '1k' },
+        { f: 2000, label: '2k' },
+        { f: 5000, label: '5k' },
+        { f: 10000, label: '10k' },
+        { f: 20000, label: '20k' }
+      ];
+      freqGrid.forEach(({ f, label }) => {
+        const x = fToX(f);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.fillText(label, x, H - 4);
+      });
+      ctx.setLineDash([]);
+
+      const eqState = store.getState().audio?.eq || { enabled: false, bands: DEFAULT_EQ_BANDS };
+      const isEnabled = Boolean(eqState.enabled);
+      const bands = eqState.bands || DEFAULT_EQ_BANDS;
+
+      // Compute total curve
+      const steps = 300;
+      const curvePts = [];
+      for (let i = 0; i <= steps; i++) {
+        const x = (i / steps) * W;
+        const f = xToF(x);
+        let totDb = 0;
+        if (isEnabled) {
+          bands.forEach((b) => {
+            totDb += computeBiquadDb(b, f);
+          });
+        }
+        const y = dbToY(totDb);
+        curvePts.push({ x, y, totDb });
+      }
+
+      // Fill area under curve
+      const zeroY = dbToY(0);
+      ctx.beginPath();
+      ctx.moveTo(curvePts[0].x, zeroY);
+      curvePts.forEach(pt => ctx.lineTo(pt.x, pt.y));
+      ctx.lineTo(curvePts[curvePts.length - 1].x, zeroY);
+      ctx.closePath();
+
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      if (isEnabled) {
+        grad.addColorStop(0, 'rgba(16, 185, 129, 0.22)');
+        grad.addColorStop(0.5, 'rgba(6, 182, 212, 0.12)');
+        grad.addColorStop(1, 'rgba(16, 185, 129, 0.02)');
+      } else {
+        grad.addColorStop(0, 'rgba(148, 163, 184, 0.08)');
+        grad.addColorStop(1, 'rgba(148, 163, 184, 0.01)');
+      }
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Stroke curve
+      ctx.beginPath();
+      curvePts.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.lineWidth = isEnabled ? 2.2 : 1.5;
+      ctx.strokeStyle = isEnabled ? '#10b981' : '#64748b';
+      ctx.stroke();
+
+      // Band Handle Dots (1..5)
+      bands.forEach((b, idx) => {
+        const hx = fToX(b.frequency);
+        const hy = isEnabled ? dbToY(b.gain) : zeroY;
+
+        ctx.beginPath();
+        ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+        ctx.fillStyle = isEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(148, 163, 184, 0.15)';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(hx, hy, 6, 0, Math.PI * 2);
+        ctx.fillStyle = isEnabled ? '#10b981' : '#94a3b8';
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 8px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(idx + 1), hx, hy);
+      });
+
+      ctx.restore();
+    }
+
+    let activeDragEqBand = null;
+
+    function setupEqCanvasInteractivity() {
+      const canvas = el.canvasEqCurve;
+      if (!canvas || canvas.dataset.interactive) return;
+      canvas.dataset.interactive = 'true';
+
+      const minF = 20, maxF = 20000;
+      const minDb = -18, maxDb = 18;
+
+      function getPointerPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+        return { x, y, W: rect.width, H: rect.height };
+      }
+
+      function handlePointerDown(e) {
+        const { x, y, W, H } = getPointerPos(e);
+        const eqState = store.getState().audio?.eq || { enabled: false, bands: DEFAULT_EQ_BANDS };
+        const bands = eqState.bands || DEFAULT_EQ_BANDS;
+
+        let closestIdx = -1;
+        let minDist = 24;
+
+        bands.forEach((b, idx) => {
+          const bx = (Math.log10(b.frequency / minF) / Math.log10(maxF / minF)) * W;
+          const by = H - ((b.gain - minDb) / (maxDb - minDb)) * H;
+          const dist = Math.hypot(x - bx, y - by);
+          if (dist < minDist) {
+            minDist = dist;
+            closestIdx = idx;
+          }
+        });
+
+        if (closestIdx !== -1) {
+          activeDragEqBand = closestIdx;
+          if (!eqState.enabled) {
+            store.setEqEnabled(true);
+          }
+        }
+      }
+
+      function handlePointerMove(e) {
+        if (activeDragEqBand === null) return;
+        const { x, y, W, H } = getPointerPos(e);
+        const freq = minF * Math.pow(maxF / minF, Math.max(0, Math.min(W, x)) / W);
+        const gain = minDb + ((H - y) / H) * (maxDb - minDb);
+
+        const clampedGain = Math.max(-18, Math.min(18, Math.round(gain * 2) / 2));
+        const clampedFreq = Math.max(20, Math.min(20000, Math.round(freq)));
+
+        store.updateEqBand(activeDragEqBand, { frequency: clampedFreq, gain: clampedGain });
+      }
+
+      function handlePointerUp() {
+        activeDragEqBand = null;
+      }
+
+      canvas.addEventListener('mousedown', handlePointerDown);
+      window.addEventListener('mousemove', handlePointerMove);
+      window.addEventListener('mouseup', handlePointerUp);
+      canvas.addEventListener('touchstart', handlePointerDown, { passive: true });
+      window.addEventListener('touchmove', handlePointerMove, { passive: true });
+      window.addEventListener('touchend', handlePointerUp);
+    }
+
+    function renderEqBandsGrid() {
+      const container = el.eqBandsGrid;
+      if (!container) return;
+      const eqState = store.getState().audio?.eq || { enabled: false, bands: DEFAULT_EQ_BANDS };
+      const bands = eqState.bands || DEFAULT_EQ_BANDS;
+
+      const bandNames = ['Low Shelf', 'Low-Mid', 'Mid', 'High-Mid', 'High Shelf'];
+      const freqRanges = [
+        { min: 30, max: 400, step: 5 },
+        { min: 100, max: 1200, step: 10 },
+        { min: 500, max: 4000, step: 20 },
+        { min: 2000, max: 10000, step: 50 },
+        { min: 4000, max: 18000, step: 100 }
+      ];
+
+      container.innerHTML = bands.map((b, idx) => {
+        const isPeaking = b.type === 'peaking';
+        const fr = freqRanges[idx];
+        const gainDisplay = `${b.gain > 0 ? '+' : ''}${b.gain.toFixed(1)} dB`;
+        const freqDisplay = b.frequency >= 1000 ? `${(b.frequency / 1000).toFixed(1)} kHz` : `${Math.round(b.frequency)} Hz`;
+        const qDisplay = typeof b.q === 'number' ? `Q: ${b.q.toFixed(2)}` : '';
+
+        return `
+          <div class="eq-band-strip" data-band-index="${idx}">
+            <div class="eq-band-title">
+              <span class="badge" style="padding: 1px 4px; font-size: 0.65rem;">${idx + 1}</span>
+              <span>${bandNames[idx]}</span>
+            </div>
+            <div class="eq-band-gain-val" id="eq-band-${idx}-gain-val">${gainDisplay}</div>
+            <div class="eq-slider-vertical-wrap">
+              <input type="range" class="eq-slider-vertical" id="eq-band-${idx}-gain" min="-18" max="18" step="0.5" value="${b.gain}" title="Band ${idx + 1} Gain (-18 to +18 dB)">
+            </div>
+            <div class="eq-band-param">
+              <div class="eq-band-param-header">
+                <span>Freq</span>
+                <span class="eq-band-param-val" id="eq-band-${idx}-freq-val">${freqDisplay}</span>
+              </div>
+              <input type="range" class="eq-band-slider-mini" id="eq-band-${idx}-freq" min="${fr.min}" max="${fr.max}" step="${fr.step}" value="${b.frequency}" title="Band ${idx + 1} Frequency">
+            </div>
+            ${isPeaking ? `
+              <div class="eq-band-param">
+                <div class="eq-band-param-header">
+                  <span>Q</span>
+                  <span class="eq-band-param-val" id="eq-band-${idx}-q-val">${qDisplay}</span>
+                </div>
+                <input type="range" class="eq-band-slider-mini" id="eq-band-${idx}-q" min="0.2" max="8.0" step="0.1" value="${b.q || 1.0}" title="Band ${idx + 1} Q Factor">
+              </div>
+            ` : '<div style="height: 24px;"></div>'}
+          </div>
+        `;
+      }).join('');
+
+      bands.forEach((b, idx) => {
+        const gainSlider = document.getElementById(`eq-band-${idx}-gain`);
+        const freqSlider = document.getElementById(`eq-band-${idx}-freq`);
+        const qSlider = document.getElementById(`eq-band-${idx}-q`);
+
+        if (gainSlider) {
+          gainSlider.addEventListener('input', (e) => {
+            store.updateEqBand(idx, { gain: parseFloat(e.target.value) });
+          });
+        }
+        if (freqSlider) {
+          freqSlider.addEventListener('input', (e) => {
+            store.updateEqBand(idx, { frequency: parseFloat(e.target.value) });
+          });
+        }
+        if (qSlider) {
+          qSlider.addEventListener('input', (e) => {
+            store.updateEqBand(idx, { q: parseFloat(e.target.value) });
+          });
+        }
+      });
+    }
+
+    function syncEqUi() {
+      const eqState = store.getState().audio?.eq || { enabled: false, bands: DEFAULT_EQ_BANDS };
+      const isEnabled = Boolean(eqState.enabled);
+
+      if (el.btnEqToggle) {
+        if (isEnabled) {
+          el.btnEqToggle.classList.add('btn-emerald-active');
+          el.btnEqToggle.title = 'Parametric EQ: Active (Click to open settings)';
+        } else {
+          el.btnEqToggle.classList.remove('btn-emerald-active');
+          el.btnEqToggle.title = 'Parametric EQ: Bypassed (Click to open settings)';
+        }
+      }
+
+      if (el.badgeEqStatus) {
+        if (isEnabled) {
+          el.badgeEqStatus.className = 'badge badge-emerald';
+          el.badgeEqStatus.textContent = 'Active';
+        } else {
+          el.badgeEqStatus.className = 'badge';
+          el.badgeEqStatus.textContent = 'Bypassed';
+        }
+      }
+
+      if (el.btnEqMasterPower) {
+        if (isEnabled) {
+          el.btnEqMasterPower.className = 'btn btn-emerald-active btn-sm';
+          el.btnEqMasterPower.textContent = 'EQ Enabled';
+        } else {
+          el.btnEqMasterPower.className = 'btn btn-sm';
+          el.btnEqMasterPower.textContent = 'EQ Bypassed';
+        }
+      }
+
+      eqState.bands.forEach((b, idx) => {
+        const gainSlider = document.getElementById(`eq-band-${idx}-gain`);
+        const gainVal = document.getElementById(`eq-band-${idx}-gain-val`);
+        const freqSlider = document.getElementById(`eq-band-${idx}-freq`);
+        const freqVal = document.getElementById(`eq-band-${idx}-freq-val`);
+        const qSlider = document.getElementById(`eq-band-${idx}-q`);
+        const qVal = document.getElementById(`eq-band-${idx}-q-val`);
+
+        if (gainSlider && Math.abs(parseFloat(gainSlider.value) - b.gain) > 0.05) {
+          gainSlider.value = b.gain;
+        }
+        if (gainVal) gainVal.textContent = `${b.gain > 0 ? '+' : ''}${b.gain.toFixed(1)} dB`;
+        if (freqSlider && Math.abs(parseFloat(freqSlider.value) - b.frequency) > 1) {
+          freqSlider.value = b.frequency;
+        }
+        if (freqVal) freqVal.textContent = b.frequency >= 1000 ? `${(b.frequency / 1000).toFixed(1)} kHz` : `${Math.round(b.frequency)} Hz`;
+        if (qSlider && typeof b.q === 'number' && Math.abs(parseFloat(qSlider.value) - b.q) > 0.05) {
+          qSlider.value = b.q;
+        }
+        if (qVal && typeof b.q === 'number') qVal.textContent = `Q: ${b.q.toFixed(2)}`;
+      });
+    }
+
+    function syncMonitoringUi() {
+      const state = store.getState();
+      const audioMuted = Boolean(state.playback.audioMuted);
+      const synthMuted = Boolean(state.playback.synthMuted);
+
+      if (el.btnMuteAudio) {
+        if (audioMuted) {
+          el.btnMuteAudio.classList.add('btn-rose-active');
+          el.btnMuteAudio.textContent = 'Muted';
+          el.btnMuteAudio.title = 'Reference Audio Muted (Click to Unmute)';
+        } else {
+          el.btnMuteAudio.classList.remove('btn-rose-active');
+          el.btnMuteAudio.textContent = 'Mute';
+          el.btnMuteAudio.title = 'Mute Reference Audio (Hotkey: M)';
+        }
+      }
+
+      if (el.btnMuteSynth) {
+        if (synthMuted) {
+          el.btnMuteSynth.classList.add('btn-rose-active');
+          el.btnMuteSynth.textContent = 'Muted';
+          el.btnMuteSynth.title = 'Transcription Synth Muted (Click to Unmute)';
+        } else {
+          el.btnMuteSynth.classList.remove('btn-rose-active');
+          el.btnMuteSynth.textContent = 'Mute';
+          el.btnMuteSynth.title = 'Mute Transcription Synth';
+        }
+      }
+
+      // Backward compatibility for automated test querying selectMonitoringMode
+      if (el.selectMonitoringMode) {
+        let mode = 'all';
+        if (audioMuted && synthMuted) mode = 'muted';
+        else if (audioMuted) mode = 'synth-solo';
+        else if (synthMuted) mode = 'audio-only';
+        if (el.selectMonitoringMode.value !== mode) {
+          el.selectMonitoringMode.value = mode;
+        }
+      }
+    }
+
+    function openEqModal() {
+      initAudioPipeline();
+      renderEqBandsGrid();
+      syncEqUi();
+      if (el.modalParametricEq) {
+        el.modalParametricEq.classList.add('open');
+      }
+      requestAnimationFrame(() => {
+        renderEqCurve();
+      });
+    }
+
+    function closeEqModal() {
+      if (el.modalParametricEq) {
+        el.modalParametricEq.classList.remove('open');
       }
     }
 
@@ -4181,11 +4892,9 @@
         el.valLoopRange.textContent = 'A: --:-- | B: --:--';
       }
 
-      // Monitoring & Volumes
-      if (el.selectMonitoringMode.value !== state.playback.monitoringMode) {
-        el.selectMonitoringMode.value = state.playback.monitoringMode;
-        el.selectMonitoringMode.dispatchEvent(new Event('change'));
-      }
+      // Monitoring, Mute & Volumes
+      syncMonitoringUi();
+      syncEqUi();
       el.sliderAudioVolume.value = state.playback.audioVolume;
       el.sliderSynthVolume.value = state.playback.synthVolume;
 
@@ -4530,15 +5239,53 @@
     el.btnClearLoop.addEventListener('click', () => store.clearLoop());
 
     // Mixer & Volumes
-    el.selectMonitoringMode.addEventListener('change', (e) => {
-      store.setMonitoringMode(e.target.value);
-    });
-    el.sliderAudioVolume.addEventListener('input', (e) => {
-      store.setAudioVolume(parseFloat(e.target.value));
-    });
-    el.sliderSynthVolume.addEventListener('input', (e) => {
-      store.setSynthVolume(parseFloat(e.target.value));
-    });
+    if (el.selectMonitoringMode) {
+      el.selectMonitoringMode.addEventListener('change', (e) => {
+        store.setMonitoringMode(e.target.value);
+      });
+    }
+    if (el.btnMuteAudio) {
+      el.btnMuteAudio.addEventListener('click', () => {
+        store.toggleAudioMute();
+      });
+    }
+    if (el.btnMuteSynth) {
+      el.btnMuteSynth.addEventListener('click', () => {
+        store.toggleSynthMute();
+      });
+    }
+    if (el.sliderAudioVolume) {
+      el.sliderAudioVolume.addEventListener('input', (e) => {
+        store.setAudioVolume(parseFloat(e.target.value));
+      });
+    }
+    if (el.sliderSynthVolume) {
+      el.sliderSynthVolume.addEventListener('input', (e) => {
+        store.setSynthVolume(parseFloat(e.target.value));
+      });
+    }
+
+    // Parametric Equalizer Modal & Settings
+    if (el.btnEqToggle) el.btnEqToggle.addEventListener('click', openEqModal);
+    if (el.btnCloseEqModal) el.btnCloseEqModal.addEventListener('click', closeEqModal);
+    if (el.btnDoneEqModal) el.btnDoneEqModal.addEventListener('click', closeEqModal);
+    if (el.btnEqMasterPower) el.btnEqMasterPower.addEventListener('click', () => store.toggleEq());
+    if (el.selectEqPreset) {
+      el.selectEqPreset.addEventListener('change', (e) => {
+        store.setEqPreset(e.target.value);
+      });
+    }
+    if (el.btnEqResetFlat) {
+      el.btnEqResetFlat.addEventListener('click', () => {
+        store.resetEq();
+        if (el.selectEqPreset) el.selectEqPreset.value = 'flat';
+      });
+    }
+    if (el.modalParametricEq) {
+      el.modalParametricEq.addEventListener('click', (e) => {
+        if (e.target === el.modalParametricEq) closeEqModal();
+      });
+    }
 
     // Tempo, Time Signature & Snap (Task 7.1)
     el.inputBpm.addEventListener('change', (e) => {
@@ -5486,7 +6233,7 @@
     store.eventBus.on('playback:volume:audio', (vol) => {
       initAudioPipeline();
       if (referenceGainNode) {
-        const isMuted = store.getState().playback.monitoringMode === 'synth-solo';
+        const isMuted = store.getState().playback.audioMuted;
         referenceGainNode.gain.setValueAtTime(isMuted ? 0 : vol, getAudioContext().currentTime);
       }
       updateVuMeters();
@@ -5495,34 +6242,59 @@
     store.eventBus.on('playback:volume:synth', (vol) => {
       initAudioPipeline();
       if (synthMasterGainNode) {
-        const isMuted = store.getState().playback.monitoringMode === 'audio-only';
+        const isMuted = store.getState().playback.synthMuted;
         synthMasterGainNode.gain.setValueAtTime(isMuted ? 0 : vol, getAudioContext().currentTime);
       }
+      updateVuMeters();
+    });
+
+    store.eventBus.on('playback:mute', ({ audioMuted, synthMuted }) => {
+      initAudioPipeline();
+      const ctx = getAudioContext();
+      if (referenceGainNode) {
+        const audioVol = audioMuted ? 0 : store.getState().playback.audioVolume;
+        referenceGainNode.gain.setValueAtTime(audioVol, ctx.currentTime);
+      }
+      if (synthMasterGainNode) {
+        const synthVol = synthMuted ? 0 : store.getState().playback.synthVolume;
+        synthMasterGainNode.gain.setValueAtTime(synthVol, ctx.currentTime);
+      }
+      syncMonitoringUi();
       updateVuMeters();
     });
 
     store.eventBus.on('playback:monitoring', (mode) => {
       initAudioPipeline();
       const ctx = getAudioContext();
+      const audioMuted = store.getState().playback.audioMuted;
+      const synthMuted = store.getState().playback.synthMuted;
       if (referenceGainNode) {
-        const audioVol = mode === 'synth-solo' ? 0 : store.getState().playback.audioVolume;
+        const audioVol = audioMuted ? 0 : store.getState().playback.audioVolume;
         referenceGainNode.gain.setValueAtTime(audioVol, ctx.currentTime);
       }
       if (synthMasterGainNode) {
-        const synthVol = mode === 'audio-only' ? 0 : store.getState().playback.synthVolume;
+        const synthVol = synthMuted ? 0 : store.getState().playback.synthVolume;
         synthMasterGainNode.gain.setValueAtTime(synthVol, ctx.currentTime);
       }
+      syncMonitoringUi();
       updateVuMeters();
+    });
+
+    store.eventBus.on('audio:eq', () => {
+      updateAudioEqNodes();
+      syncEqUi();
+      if (el.modalParametricEq && el.modalParametricEq.classList.contains('open')) {
+        renderEqCurve();
+      }
     });
 
     // Decibel Meter & VU Level update function (Task 5.3)
     function updateVuMeters() {
       const state = store.getState();
-      const mode = state.playback.monitoringMode;
       const faderAudioVol = state.playback.audioVolume;
       const faderSynthVol = state.playback.synthVolume;
-      const curAudioVol = mode === 'synth-solo' ? 0 : faderAudioVol;
-      const curSynthVol = mode === 'audio-only' ? 0 : faderSynthVol;
+      const curAudioVol = state.playback.audioMuted ? 0 : faderAudioVol;
+      const curSynthVol = state.playback.synthMuted ? 0 : faderSynthVol;
 
       // Decibel text readouts reflect fader gain settings
       const audioDb = faderAudioVol > 0.001 ? (20 * Math.log10(faderAudioVol)).toFixed(1) : '-inf';
@@ -7291,6 +8063,10 @@
           el.modalConfirmNew.classList.remove('open');
           return;
         }
+        if (el.modalParametricEq && el.modalParametricEq.classList.contains('open')) {
+          closeEqModal();
+          return;
+        }
         if (el.modalNoteEditor && el.modalNoteEditor.classList.contains('open')) {
           closeNoteEditorModal();
           return;
@@ -7319,10 +8095,8 @@
           const activeTrack = state.tracks.find(t => t.id === state.view.activeTrackId);
           showToast(`${activeTrack?.name || 'Track'} ${activeTrack?.muted ? 'Muted' : 'Unmuted'}`, 'info');
         } else {
-          const curMode = state.playback.monitoringMode;
-          const nextMode = curMode === 'synth-solo' ? 'all' : 'synth-solo';
-          store.setMonitoringMode(nextMode);
-          showToast(`Monitoring: ${nextMode === 'synth-solo' ? 'Synth Solo (Audio Muted)' : 'All Audio'}`, 'info');
+          store.toggleAudioMute();
+          showToast(`Reference Audio: ${store.getState().playback.audioMuted ? 'Muted' : 'Unmuted'}`, 'info');
         }
       } else if (e.code === 'KeyS' && !(e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -7337,10 +8111,8 @@
           const activeTrack = state.tracks.find(t => t.id === state.view.activeTrackId);
           showToast(`${activeTrack?.name || 'Track'} Solo ${activeTrack?.solo ? 'On' : 'Off'}`, 'info');
         } else {
-          const curMode = state.playback.monitoringMode;
-          const nextMode = curMode === 'synth-solo' ? 'all' : 'synth-solo';
-          store.setMonitoringMode(nextMode);
-          showToast(`Monitoring: ${nextMode === 'synth-solo' ? 'Transcript Synth Solo' : 'All Audio'}`, 'info');
+          store.toggleSynthMute();
+          showToast(`Transcription Synth: ${store.getState().playback.synthMuted ? 'Muted' : 'Unmuted'}`, 'info');
         }
       } else if (e.code === 'KeyT') {
         e.preventDefault();
@@ -7474,6 +8246,9 @@
       if (store.getState().view.editorMode !== 'simple') {
         renderPianoRollGrid();
       }
+      if (el.modalParametricEq && el.modalParametricEq.classList.contains('open')) {
+        renderEqCurve();
+      }
     });
 
     // Reactive Store Subscriber & Auto-Save (Task 9.4)
@@ -7489,9 +8264,12 @@
     });
 
     // Initialize View
-    createCustomDropdown(el.selectMonitoringMode);
     createCustomDropdown(el.selectTimeSignature);
     createCustomDropdown(el.selectSnapDivision);
+    renderEqBandsGrid();
+    setupEqCanvasInteractivity();
+    syncMonitoringUi();
+    syncEqUi();
     updateSelectedPitchDisplay();
     updateEditorModeView();
     renderPianoKeys();
@@ -7680,7 +8458,14 @@
       insertRestAtCursor,
       executeNewSessionReset,
       durationToNoteName,
-      MUSICAL_NOTE_DURATIONS
+      MUSICAL_NOTE_DURATIONS,
+      getEqNodes: () => eqFilterNodes,
+      openEqModal,
+      closeEqModal,
+      renderEqCurve,
+      renderEqBandsGrid,
+      syncEqUi,
+      syncMonitoringUi
     };
     window.handleAudioFileSelected = handleAudioFileSelected;
     window.updateZoomView = updateZoomView;

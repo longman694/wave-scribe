@@ -262,6 +262,13 @@ server.listen(PORT, async () => {
     assert(phase3Result.isPlayheadInViewport, 'Playhead line must stay visible in viewport when zooming in');
     assert.equal(phase3Result.zoomAfterMouse, 8.0);
     assert(phase3Result.ratioDiff < 0.005, `Mouse anchor ratio difference must be < 0.005, got ${phase3Result.ratioDiff}`);
+
+    // Verify post-rAF anchor persistence
+    await wait(80);
+    const scrollAfterDelay = await evaluate(`document.getElementById('piano-roll-grid-container').scrollLeft`);
+    const widthAt8xDelayed = await evaluate(`document.getElementById('piano-roll-grid-content').clientWidth`);
+    const ratioDelayed = (scrollAfterDelay + 350) / widthAt8xDelayed;
+    assert(Math.abs(ratioDelayed - phase3Result.ratioBefore) < 0.005, 'Mouse anchor must persist after requestAnimationFrame reflow');
     console.log('✓ Phase 3 Zoom anchor stabilization verified:', phase3Result);
 
     console.log('\n=== ALL PHASE 1 - 3 CHECKS PASSED SUCCESSFULLY ===');

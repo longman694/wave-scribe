@@ -4624,10 +4624,17 @@
       }
     }
 
-    function updateEditorModeView() {
+    let currentEditorMode = null;
+
+    function updateEditorModeView(force = false) {
       const state = store.getState();
       const isSimple = state.view.editorMode === 'simple';
       const currentZoom = (state.view && typeof state.view.zoom === 'number') ? state.view.zoom : 1.0;
+
+      if (!force && currentEditorMode === state.view.editorMode) {
+        return;
+      }
+      currentEditorMode = state.view.editorMode;
 
       // Capture scrollLeft from whichever viewport was active/visible before mode change
       let referenceScrollLeft = 0;
@@ -8505,6 +8512,9 @@
         if (el.statusCursorTime) el.statusCursorTime.textContent = `Cursor: ${formatTimestamp(state.playback.currentTime)}`;
         return;
       }
+      if (changeType === 'view:zoom') {
+        return;
+      }
       syncUiFromState();
       scheduleAutoSave();
     });
@@ -8585,39 +8595,50 @@
           const file = new File([savedAudio.blob], savedAudio.fileName || 'restored-audio.wav', { type: savedAudio.blob.type || 'audio/wav' });
           await handleAudioFileSelected(file);
           showToast(`Restored previous session (${store.getState().notes.length} notes)`, 'success');
-        }
 
-        // 4. Re-apply target zoom and cursor position after audio ingestion
-        if (typeof targetZoom === 'number' && targetZoom >= 0.5) {
-          updateZoomView(targetZoom, { type: 'restore', force: true });
-        }
-
-        if (typeof targetCurrentTime === 'number' && targetCurrentTime >= 0) {
-          seekAudio(targetCurrentTime, true);
-        }
-
-        // 5. Restore viewport scroll positions safely across reflow
-        const applyScrollRestoration = () => {
-          if (typeof targetScrollLeft === 'number' && targetScrollLeft >= 0) {
-            syncTimelineScroll(targetScrollLeft);
-          } else if (targetCurrentTime > 0) {
-            scrollPlayheadIntoView(targetCurrentTime);
+          // 4. Re-apply target zoom and cursor position after audio ingestion
+          if (typeof targetZoom === 'number' && targetZoom >= 0.5) {
+            updateZoomView(targetZoom, { type: 'restore', force: true });
           }
 
+          if (typeof targetCurrentTime === 'number' && targetCurrentTime >= 0) {
+            seekAudio(targetCurrentTime, true);
+          }
+
+          // 5. Restore viewport scroll positions safely across reflow
+          const applyScrollRestoration = () => {
+            if (typeof targetScrollLeft === 'number' && targetScrollLeft >= 0) {
+              syncTimelineScroll(targetScrollLeft);
+            } else if (targetCurrentTime > 0) {
+              scrollPlayheadIntoView(targetCurrentTime);
+            }
+
+            if (typeof targetPianoRollScrollTop === 'number' && targetPianoRollScrollTop >= 0) {
+              if (el.pianoRollGridContainer) el.pianoRollGridContainer.scrollTop = targetPianoRollScrollTop;
+              if (el.pianoKeysGutter) el.pianoKeysGutter.scrollTop = targetPianoRollScrollTop;
+            }
+            const curTime = (store.getState().playback && typeof store.getState().playback.currentTime === 'number') ? store.getState().playback.currentTime : 0;
+            const duration = (store.getState().audio && store.getState().audio.duration > 0) ? store.getState().audio.duration : 30;
+            updatePlayheadPosition(curTime, duration);
+          };
+
+          applyScrollRestoration();
+          await new Promise(resolve => requestAnimationFrame(() => {
+            applyScrollRestoration();
+            resolve();
+          }));
+        } else if (savedSession || (typeof targetScrollLeft === 'number' && targetScrollLeft >= 0) || targetCurrentTime > 0) {
+          if (typeof targetCurrentTime === 'number' && targetCurrentTime > 0) {
+            seekAudio(targetCurrentTime, true);
+          }
+          if (typeof targetScrollLeft === 'number' && targetScrollLeft >= 0) {
+            syncTimelineScroll(targetScrollLeft);
+          }
           if (typeof targetPianoRollScrollTop === 'number' && targetPianoRollScrollTop >= 0) {
             if (el.pianoRollGridContainer) el.pianoRollGridContainer.scrollTop = targetPianoRollScrollTop;
             if (el.pianoKeysGutter) el.pianoKeysGutter.scrollTop = targetPianoRollScrollTop;
           }
-          const curTime = (store.getState().playback && typeof store.getState().playback.currentTime === 'number') ? store.getState().playback.currentTime : 0;
-          const duration = (store.getState().audio && store.getState().audio.duration > 0) ? store.getState().audio.duration : 30;
-          updatePlayheadPosition(curTime, duration);
-        };
-
-        applyScrollRestoration();
-        await new Promise(resolve => requestAnimationFrame(() => {
-          applyScrollRestoration();
-          resolve();
-        }));
+        }
       } catch (err) {
         console.warn('Session auto-restore error:', err);
       } finally {

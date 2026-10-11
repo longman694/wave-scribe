@@ -40,6 +40,7 @@ This document tracks the specification, implementation progress, and test valida
 - [x] Wire `Ctrl + Wheel` on `#piano-roll-grid-container` and `#annotation-viewport` to use the mouse anchor.
 - [x] Wire `btnZoomIn`, `btnZoomOut`, and `sliderWaveformZoom` to use the playhead anchor.
 - [x] Ensure horizontal scroll synchronization between waveform, annotation, and piano roll viewports remains locked.
+- [x] **Post-Reflow Anchor Clobber Fix**: Prevented `syncUiFromState()` -> `updateEditorModeView()` from scheduling redundant post-reflow `requestAnimationFrame(() => syncTimelineScroll(referenceScrollLeft))` during zoom updates by adding `currentEditorMode` transition guards and bypassing `syncUiFromState` on `view:zoom` notifications. Fixed `initSessionRestore` to avoid asynchronously re-applying default zoom/scroll when no saved audio was restored.
 
 ### Phase 4: Piano Roll Multi-Block Copy, Paste & Duplicate
 - [x] Read all note IDs from `selectedNoteIds` (plus `state.view.selectedNoteId`) in `Ctrl+C`.

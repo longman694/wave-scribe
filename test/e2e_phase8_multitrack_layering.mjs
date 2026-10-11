@@ -1,5 +1,37 @@
+import { createServer } from 'http';
+import { readFileSync, writeFileSync } from 'fs';
+import { resolve, extname } from 'path';
 import { spawn } from 'child_process';
-import { writeFileSync, readFileSync } from 'fs';
+
+const PORT = 8118;
+const ROOT = resolve('.');
+
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.mjs': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mp3',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
+};
+
+const server = createServer((req, res) => {
+  let url = req.url.split('?')[0];
+  if (url === '/') url = '/index.html';
+  const filePath = resolve(ROOT, '.' + url);
+  try {
+    const ext = extname(filePath);
+    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+    res.end(readFileSync(filePath));
+  } catch (e) {
+    res.writeHead(404);
+    res.end('Not found');
+  }
+});
 
 async function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -14,6 +46,8 @@ function assert(condition, message) {
 }
 
 async function run() {
+  await new Promise(resolve => server.listen(PORT, resolve));
+  console.log(`Test server running at http://localhost:${PORT}`);
   console.log('--- STARTING PHASE 8 MULTI-TRACK & INSTRUMENT LAYERING E2E TEST ---');
   const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
   const edge = spawn(edgePath, [
@@ -22,7 +56,7 @@ async function run() {
     '--remote-debugging-port=9232',
     '--autoplay-policy=no-user-gesture-required',
     '--window-size=1920,1200',
-    'http://localhost:8080/index.html'
+    `http://localhost:${PORT}/index.html`
   ]);
 
   let wsUrl = null;
@@ -31,7 +65,7 @@ async function run() {
     try {
       const res = await fetch('http://localhost:9232/json');
       const list = await res.json();
-      const pageTarget = list.find(t => t.type === 'page' && t.url.includes('localhost:8080'));
+      const pageTarget = list.find(t => t.type === 'page' && (t.url.includes(`localhost:${PORT}`) || t.url.includes('index.html')));
       if (pageTarget && pageTarget.webSocketDebuggerUrl) {
         wsUrl = pageTarget.webSocketDebuggerUrl;
         break;
@@ -197,13 +231,17 @@ async function run() {
     const updatedTrack = store.getState().tracks.find(t => t.id === customTrackId);
     return {
       updatedName: updatedTrack.name,
-      badgeText: document.getElementById('badge-active-track').textContent
+      badgeText: document.getElementById('badge-active-track').textContent,
+      hasInput: Boolean(strip.querySelector('.track-title-input')),
+      restoredTitle: strip.querySelector('.track-title')?.textContent
     };
   })()`);
 
   console.log('Rename Result:', renameResult);
   assert(renameResult.updatedName === 'Lead Synth 2', 'Track successfully renamed to Lead Synth 2');
   assert(renameResult.badgeText.includes('Lead Synth 2'), 'Active track badge updated to Lead Synth 2 Track');
+  assert(renameResult.hasInput === false, 'Track title input removed after pressing Enter');
+  assert(renameResult.restoredTitle === 'Lead Synth 2', 'Track title restored with updated name');
 
   // Test Color Pill Cycling
   console.log('Testing Color Pill Palette Cycling...');
@@ -418,9 +456,11 @@ async function run() {
 
   ws.close();
   edge.kill();
+  server.close();
 }
 
 run().catch(err => {
   console.error('Test execution failed:', err);
+  server.close();
   process.exit(1);
 });

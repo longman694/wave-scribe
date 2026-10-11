@@ -2851,10 +2851,19 @@
           input.select();
 
           let finished = false;
+          const cleanup = (finalName) => {
+            if (input.parentNode) {
+              titleSpan.textContent = finalName || 'Untitled';
+              input.replaceWith(titleSpan);
+            }
+          };
+
           const finishRename = () => {
             if (finished) return;
             finished = true;
             const val = input.value.trim();
+            const finalName = val || originalName;
+            cleanup(finalName);
             if (val && val !== originalName) {
               store.updateTrack(track.id, { name: val });
               if (store.getState().view.activeTrackId === track.id) {
@@ -2865,12 +2874,24 @@
             renderMixerStrips();
           };
 
+          const cancelRename = () => {
+            if (finished) return;
+            finished = true;
+            cleanup(originalName);
+            renderMixerStrips();
+          };
+
           input.addEventListener('blur', finishRename);
           input.addEventListener('keydown', (ev) => {
-            if (ev.key === 'Enter') finishRename();
-            if (ev.key === 'Escape') {
-              finished = true;
-              renderMixerStrips();
+            if (ev.isComposing) return;
+            if (ev.key === 'Enter' || ev.code === 'Enter' || ev.keyCode === 13) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              finishRename();
+            } else if (ev.key === 'Escape' || ev.code === 'Escape' || ev.keyCode === 27) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              cancelRename();
             }
           });
         }

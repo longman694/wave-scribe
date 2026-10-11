@@ -1057,6 +1057,87 @@ export class Store {
     }, options);
   }
 
+  /**
+   * Adds multiple notes in an atomic batch operation with a single undo history entry.
+   * @param {Array<Object>} notesArray - Array of note specification objects
+   * @param {Object} [options] - Options like monophonic, select, recordHistory
+   * @returns {Array<Object>} - The newly created note objects
+   */
+  addNotes(notesArray, options = {}) {
+    if (!Array.isArray(notesArray) || notesArray.length === 0) return [];
+
+    if (options.recordHistory !== false) {
+      this._lastHistoryAction = null;
+      this.snapshotForHistory(`Add ${notesArray.length} Note${notesArray.length > 1 ? 's' : ''}`);
+    }
+
+    const createdNotes = [];
+    const isMonophonic = options.monophonic !== undefined ? options.monophonic : (this.state.view.editorMode === 'simple');
+
+    for (const noteData of notesArray) {
+      const isRest = Boolean(noteData.isRest || noteData.pitchName === 'REST' || noteData.pitchName === 'R');
+      const id = noteData.id || `note-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const midi = isRest ? null : (noteData.midi !== undefined ? noteData.midi : noteNameToMidi(noteData.pitchName || 'C4'));
+      const pitchName = isRest ? 'REST' : (sanitizeText(noteData.pitchName) || midiToNoteName(midi));
+      const startTime = Math.max(0, noteData.startTime !== undefined ? noteData.startTime : 0);
+      const duration = Math.max(0.05, noteData.duration !== undefined ? noteData.duration : 0.5);
+      const trackId = noteData.trackId || this.state.view.activeTrackId;
+
+      if (isMonophonic) {
+        const newStart = Math.round(startTime * 10000) / 10000;
+        const newEnd = Math.round((startTime + duration) * 10000) / 10000;
+
+        this.state.notes = this.state.notes.filter(existing => {
+          if (existing.trackId !== trackId) return true;
+          const existStart = Math.round(existing.startTime * 10000) / 10000;
+          const existEnd = Math.round((existing.startTime + existing.duration) * 10000) / 10000;
+
+          if (existStart >= newStart && existEnd <= newEnd) return false;
+          if (existStart < newStart && existEnd > newStart) {
+            existing.duration = Math.max(0.05, Math.round((newStart - existStart) * 10000) / 10000);
+            return true;
+          }
+          if (existStart >= newStart && existStart < newEnd && existEnd > newEnd) {
+            existing.startTime = newEnd;
+            existing.duration = Math.max(0.05, Math.round((existEnd - newEnd) * 10000) / 10000);
+            return true;
+          }
+          return true;
+        });
+      }
+
+      const note = {
+        id,
+        trackId,
+        midi,
+        pitchName,
+        startTime,
+        duration,
+        velocity: isRest ? 0 : (noteData.velocity !== undefined ? noteData.velocity : 0.8),
+        chordLabel: noteData.chordLabel ? sanitizeText(noteData.chordLabel) : null,
+        isRest
+      };
+      this.state.notes.push(note);
+      createdNotes.push(note);
+    }
+
+    this.state.notes.sort((a, b) => a.startTime - b.startTime);
+
+    if (options.select === false || (this.state.view.editorMode === 'simple' && options.select !== true)) {
+      this.state.view.selectedNoteId = null;
+    } else if (createdNotes.length > 0) {
+      this.state.view.selectedNoteId = createdNotes[0].id;
+    }
+
+    if (options.recordHistory !== false) {
+      this._updateCommittedSnapshot(`Add ${createdNotes.length} Note${createdNotes.length > 1 ? 's' : ''}`);
+    }
+
+    this.notify('notes:batch-add', createdNotes);
+    this.eventBus.emit('notes:changed', this.state.notes);
+    return createdNotes;
+  }
+
   updateNote(noteId, updates, options = {}) {
     const index = this.state.notes.findIndex(n => n.id === noteId);
     if (index === -1) return null;

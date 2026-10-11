@@ -238,6 +238,22 @@ describe('Reactive Store & State Management', () => {
     // Redo re-deletes them
     store.redo();
     assert.equal(store.getState().notes.length, 1);
+
+    // Batch addNotes atomic undo test
+    const batchAdded = store.addNotes([
+      { pitchName: 'A4', startTime: 4.0, duration: 0.5 },
+      { pitchName: 'B4', startTime: 5.0, duration: 0.5 }
+    ]);
+    assert.equal(batchAdded.length, 2);
+    assert.equal(store.getState().notes.length, 3);
+
+    // Single undo removes all batch-added notes
+    store.undo();
+    assert.equal(store.getState().notes.length, 1);
+
+    // Redo restores them
+    store.redo();
+    assert.equal(store.getState().notes.length, 3);
   });
 
   test('Session JSON export and import roundtrip preserves state', () => {

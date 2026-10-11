@@ -262,6 +262,50 @@ test('UX Improvements & Piano Roll State Logic', async (t) => {
 
     delete globalThis.localStorage;
   });
+
+  await t.test('Piano roll note insertion creates exactly one undo history entry (single Ctrl+Z removes note)', () => {
+    const store = new Store();
+    store.setEditorMode('piano-roll');
+    assert.equal(store.history.past.length, 0);
+
+    // 1. Click to add note (draw_new with matching duration)
+    const note = store.addNote({
+      trackId: 'track-melody',
+      midi: 60,
+      pitchName: 'C4',
+      startTime: 1.0,
+      duration: 0.5
+    }, { monophonic: false });
+
+    assert.equal(store.getState().notes.length, 1);
+    assert.equal(store.history.past.length, 1, 'Only one snapshot for Add Note');
+
+    // Single undo removes the note immediately
+    const undone = store.undo();
+    assert.equal(undone, true);
+    assert.equal(store.getState().notes.length, 0, 'Note must be removed after single undo');
+
+    // Redo restores the note
+    store.redo();
+    assert.equal(store.getState().notes.length, 1);
+    assert.equal(store.getState().notes[0].pitchName, 'C4');
+
+    // 2. Draw note and stretch duration during draw gesture (using recordHistory: false)
+    store.updateNote(note.id, { duration: 1.25 }, { recordHistory: false });
+    store._updateCommittedSnapshot('Add Note');
+
+    // Past stack still has only 1 entry!
+    assert.equal(store.history.past.length, 1);
+
+    // Single undo still removes the note
+    store.undo();
+    assert.equal(store.getState().notes.length, 0, 'Note must be removed after single undo even after draw stretch');
+
+    // Redo restores it with stretched duration
+    store.redo();
+    assert.equal(store.getState().notes.length, 1);
+    assert.equal(store.getState().notes[0].duration, 1.25);
+  });
 });
 
 

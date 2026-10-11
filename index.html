@@ -4488,11 +4488,9 @@
     });
 
     // Zoom Controls & Dynamic Track Resizing (Task 2.3 & Task 6.1)
-    function updateZoomView(zoom) {
-      const clamped = Math.max(0.5, Math.min(30, zoom));
-      store.setZoom(clamped);
-      el.sliderWaveformZoom.value = clamped;
-      el.badgeZoomLevel.textContent = `${clamped.toFixed(1)}x Zoom`;
+    function applyZoomStyles(clamped) {
+      if (el.sliderWaveformZoom) el.sliderWaveformZoom.value = clamped;
+      if (el.badgeZoomLevel) el.badgeZoomLevel.textContent = `${clamped.toFixed(1)}x Zoom`;
 
       const pctWidth = `${Math.round(clamped * 100)}%`;
       if (el.waveformTrack) {
@@ -4503,6 +4501,102 @@
       }
       if (el.pianoRollGridContent) {
         el.pianoRollGridContent.style.width = pctWidth;
+      }
+    }
+
+    /**
+     * Updates zoom level while anchoring to a focal point:
+     * - Mouse position (e.g. during Ctrl+Wheel over any timeline viewport)
+     * - Playhead line position (during toolbar buttons, slider, or default)
+     * @param {number} zoom - Target zoom level (clamped 0.5 - 30)
+     * @param {Object} [anchor] - Focal anchor: { type: 'mouse', viewport, clientX } | { type: 'playhead' } | { type: 'fit' } | { type: 'restore' }
+     */
+    function updateZoomView(zoom, anchor = null) {
+      const state = store.getState();
+      const oldZoom = (state.view && typeof state.view.zoom === 'number') ? state.view.zoom : 1.0;
+      const clamped = Math.max(0.5, Math.min(30, zoom));
+      if (Math.abs(clamped - oldZoom) < 0.001) return;
+
+      if (anchor && anchor.type === 'restore') {
+        store.setZoom(clamped);
+        applyZoomStyles(clamped);
+        renderTimelineTracks();
+        renderAnnotationTrack();
+        if (store.getState().view.editorMode !== 'simple') {
+          renderPianoRollGrid();
+        }
+        return;
+      }
+
+      const duration = (state.audio && state.audio.duration > 0) ? state.audio.duration : 30;
+
+      // Primary active timeline viewport
+      const activeViewport = (state.view.editorMode === 'piano-roll' && el.pianoRollGridContainer)
+        ? el.pianoRollGridContainer
+        : el.waveformViewport;
+
+      const track = (state.view.editorMode === 'piano-roll' && el.pianoRollGridContent)
+        ? el.pianoRollGridContent
+        : (el.waveformTrack || el.annotationLane || activeViewport);
+
+      const oldScrollLeft = activeViewport ? activeViewport.scrollLeft : 0;
+      const viewportWidth = activeViewport ? activeViewport.clientWidth : 1000;
+      const oldTrackWidth = track ? track.clientWidth : (viewportWidth * oldZoom);
+
+      let targetScrollLeft = oldScrollLeft;
+
+      if (anchor && anchor.type === 'fit') {
+        store.setZoom(clamped);
+        applyZoomStyles(clamped);
+        targetScrollLeft = 0;
+      } else if (anchor && anchor.type === 'mouse' && anchor.viewport && typeof anchor.clientX === 'number') {
+        // --- 1. Mouse Focal Anchor ---
+        const rect = anchor.viewport.getBoundingClientRect();
+        const mouseViewportX = anchor.clientX - rect.left;
+        const currentViewportScroll = anchor.viewport.scrollLeft;
+        const trackX = currentViewportScroll + mouseViewportX;
+        const ratio = trackX / Math.max(1, oldTrackWidth);
+
+        store.setZoom(clamped);
+        applyZoomStyles(clamped);
+
+        const newTrackWidth = track ? track.clientWidth : (oldTrackWidth * (clamped / oldZoom));
+        const newTrackX = ratio * newTrackWidth;
+        targetScrollLeft = Math.max(0, newTrackX - mouseViewportX);
+      } else {
+        // --- 2. Playhead-Line Focal Anchor (Default for buttons, slider, hotkeys) ---
+        const curTime = (state.playback && typeof state.playback.currentTime === 'number') ? state.playback.currentTime : 0;
+        const playheadRatio = duration > 0 ? (curTime / duration) : 0;
+        const oldPlayheadTrackX = playheadRatio * oldTrackWidth;
+        const oldPlayheadViewportX = oldPlayheadTrackX - oldScrollLeft;
+
+        store.setZoom(clamped);
+        applyZoomStyles(clamped);
+
+        const newTrackWidth = track ? track.clientWidth : (oldTrackWidth * (clamped / oldZoom));
+        const newPlayheadTrackX = playheadRatio * newTrackWidth;
+
+        if (oldPlayheadViewportX >= 0 && oldPlayheadViewportX <= viewportWidth) {
+          // Playhead was visible: preserve its exact screen-space position
+          targetScrollLeft = Math.max(0, newPlayheadTrackX - oldPlayheadViewportX);
+        } else {
+          // Playhead was offscreen: center the playhead line in viewport
+          targetScrollLeft = Math.max(0, newPlayheadTrackX - (viewportWidth / 2));
+        }
+      }
+
+      // Synchronize horizontal scroll across all timeline viewports
+      if (activeViewport) {
+        activeViewport.scrollLeft = targetScrollLeft;
+      }
+      if (el.waveformViewport && el.waveformViewport !== activeViewport) {
+        el.waveformViewport.scrollLeft = targetScrollLeft;
+      }
+      if (el.pianoRollGridContainer && el.pianoRollGridContainer !== activeViewport) {
+        el.pianoRollGridContainer.scrollLeft = targetScrollLeft;
+      }
+      if (el.annotationViewport && el.annotationViewport !== activeViewport) {
+        el.annotationViewport.scrollLeft = targetScrollLeft;
       }
 
       renderTimelineTracks();
@@ -4516,16 +4610,16 @@
     }
 
     el.sliderWaveformZoom.addEventListener('input', (e) => {
-      updateZoomView(parseFloat(e.target.value));
+      updateZoomView(parseFloat(e.target.value), { type: 'playhead' });
     });
     el.btnZoomIn.addEventListener('click', () => {
-      updateZoomView(store.getState().view.zoom + 1);
+      updateZoomView(store.getState().view.zoom + 1, { type: 'playhead' });
     });
     el.btnZoomOut.addEventListener('click', () => {
-      updateZoomView(store.getState().view.zoom - 1);
+      updateZoomView(store.getState().view.zoom - 1, { type: 'playhead' });
     });
     el.btnZoomFit.addEventListener('click', () => {
-      updateZoomView(1.0);
+      updateZoomView(1.0, { type: 'fit' });
     });
 
     let isSyncingScroll = false;
@@ -4800,21 +4894,10 @@
       if (e.ctrlKey) {
         // Zoom centered at mouse cursor
         e.preventDefault();
-        const rect = el.waveformViewport.getBoundingClientRect();
-        const mouseViewportX = e.clientX - rect.left;
         const currentZoom = store.getState().view.zoom || 1.0;
-        const oldTrackWidth = el.waveformTrack ? el.waveformTrack.clientWidth : (el.waveformViewport.clientWidth * currentZoom);
-        const trackX = el.waveformViewport.scrollLeft + mouseViewportX;
-        const ratio = trackX / Math.max(1, oldTrackWidth);
-
         const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
         const newZoom = Math.max(0.5, Math.min(30, currentZoom * zoomFactor));
-        updateZoomView(newZoom);
-
-        const newTrackWidth = el.waveformTrack ? el.waveformTrack.clientWidth : (el.waveformViewport.clientWidth * newZoom);
-        const newTrackX = ratio * newTrackWidth;
-        const newScrollLeft = newTrackX - mouseViewportX;
-        el.waveformViewport.scrollLeft = Math.max(0, newScrollLeft);
+        updateZoomView(newZoom, { type: 'mouse', viewport: el.waveformViewport, clientX: e.clientX });
       } else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         // Horizontal scroll
         e.preventDefault();
@@ -4825,7 +4908,14 @@
     if (el.annotationViewport) {
       el.annotationViewport.addEventListener('wheel', (e) => {
         if (e.target.closest('.annotation-block')) return;
-        if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        if (e.ctrlKey) {
+          // Zoom centered at mouse cursor
+          e.preventDefault();
+          const currentZoom = store.getState().view.zoom || 1.0;
+          const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+          const newZoom = Math.max(0.5, Math.min(30, currentZoom * zoomFactor));
+          updateZoomView(newZoom, { type: 'mouse', viewport: el.annotationViewport, clientX: e.clientX });
+        } else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
           e.preventDefault();
           el.annotationViewport.scrollLeft += (e.deltaY || e.deltaX);
         }
@@ -6413,7 +6503,7 @@
           const currentZoom = store.getState().view.zoom || 1.0;
           const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
           const newZoom = Math.max(0.5, Math.min(30, currentZoom * zoomFactor));
-          updateZoomView(newZoom);
+          updateZoomView(newZoom, { type: 'mouse', viewport: el.pianoRollGridContainer || el.canvasPianoRoll, clientX: e.clientX });
 
         } else {
           // --- Normal Scroll Wheel: Move piano roll view up and down ---
@@ -6778,15 +6868,25 @@
     window.addEventListener('mouseup', () => {
       if (!pianoRollDragState) return;
 
-      if (pianoRollDragState.type === 'resize' || pianoRollDragState.type === 'draw_new') {
-        store.updateNote(pianoRollDragState.targetNote.id, {
-          duration: pianoRollDragState.targetNote.duration
-        });
-        lastPianoRollDuration = pianoRollDragState.targetNote.duration;
-        if (pianoRollDragState.type === 'draw_new') {
-          selectedNoteIds.clear();
-          store.setSelectedNoteId(null);
+      if (pianoRollDragState.type === 'draw_new') {
+        if (pianoRollDragState.targetNote.duration !== pianoRollDragState.origDuration) {
+          store.updateNote(pianoRollDragState.targetNote.id, {
+            duration: pianoRollDragState.targetNote.duration
+          }, { recordHistory: false });
+          if (typeof store._updateCommittedSnapshot === 'function') {
+            store._updateCommittedSnapshot('Add Note');
+          }
         }
+        lastPianoRollDuration = pianoRollDragState.targetNote.duration;
+        selectedNoteIds.clear();
+        store.setSelectedNoteId(null);
+      } else if (pianoRollDragState.type === 'resize') {
+        if (pianoRollDragState.targetNote.duration !== pianoRollDragState.origDuration) {
+          store.updateNote(pianoRollDragState.targetNote.id, {
+            duration: pianoRollDragState.targetNote.duration
+          });
+        }
+        lastPianoRollDuration = pianoRollDragState.targetNote.duration;
       } else if (pianoRollDragState.type === 'move' && pianoRollDragState.hasMoved) {
         const finalDt = pianoRollDragState.finalDt || 0;
         const finalDMidi = pianoRollDragState.finalDMidi || 0;
